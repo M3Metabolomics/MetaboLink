@@ -404,6 +404,12 @@ shinyUI(dashboardPage(
                   plotlyOutput("plotpca2"), br(),
                   htmlOutput("pca2Details")
                 )),
+                column(6, box(width = NULL,
+                              plotlyOutput("plotscree1", width = "100%")
+                )),
+                column(6, box(width = NULL,
+                              plotlyOutput("plotscree2", width = "100%")
+                )),
                 #TODO boxplots (see normalization)
                 column(6, box(width = NULL,
                   plotOutput("boxplot_1", width = "100%")

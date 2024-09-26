@@ -2,15 +2,16 @@ shinyServer(function(session, input, output) {
   options(shiny.maxRequestSize = 30 * 1024^2)
 
   # Global variables
-  rv <- reactiveValues(data = list(),
-                       sequence = list(),
-                       activeFile = NULL,
-                       results = list(),
-                       tmpData = NULL,
-                       tmpSequence = NULL,
-                       choices = NULL,
-                       drift_plot_select = 1,
-                       info = vector("character"))
+  rv <- reactiveValues(data = list(), # List of data frames
+                       sequence = list(), # List of sequences
+                       activeFile = NULL, # Index of active file
+                       results = list(), # List of PCA results
+                       tmpData = NULL, # Temporary data
+                       tmpSequence = NULL, # Temporary sequence
+                       choices = NULL, # List of choices
+                       drift_plot_select = 1, # Drift plot selection
+                       info = vector("character"), # Vector of info
+                       pca_results = list()) # List of PCA results
 
   userConfirmation <- reactiveVal(FALSE)
   disable("upload")
@@ -910,8 +911,17 @@ observeEvent(input$mergeDatasets, {
           cat("Warning: seq_subset is empty!\n")
         }
         
-        pca <- pcaplot(data_subset, seq_subset, input$pca1_islog) # Perform PCA on the data
-        output$plotpca1 <- renderPlotly(pca)
+        # 
+        pca_results <- pcaplot(data_subset, seq_subset, input$pca1_islog)
+        
+        
+        output$plotpca1 <- renderPlotly({
+          pca_results$pca_plot_plotly
+        })
+        
+        output$plotscree1 <- renderPlotly({
+          pca_results$scree_plot_plotly
+        })
 
         if (sum(seq[, 1] %in% "QC") > 0) {
           qccv <- paste0("CV in QC samples: ", round(cvmean(data[seq[, 1] %in% "QC"]), 2), "</br>")
@@ -955,8 +965,16 @@ observeEvent(input$mergeDatasets, {
       
       seq_subset <- seq[seq[, "labels"] %in% c("Sample", "QC"), ] # Get the sequence for the samples and QC
       
-      pca <- pcaplot(data_subset, seq_subset, input$pca2_islog)
-      output$plotpca2 <- renderPlotly(pca)
+      # 
+      pca_results <- pcaplot(data_subset, seq_subset, input$pca1_islog)
+      
+      output$plotpca2 <- renderPlotly({
+        pca_results$pca_plot_plotly
+      })
+      
+      output$plotscree2 <- renderPlotly({
+        pca_results$scree_plot_plotly
+      })
 
       if (sum(seq$labels %in% "QC") > 0) {
         qccv <- paste0("CV in QC samples: ", round(cvmean(data[seq[, 1] %in% "QC"]), 2), "</br>")
