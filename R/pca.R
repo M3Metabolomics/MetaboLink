@@ -1,8 +1,8 @@
 pcaplot <- function(data, sequence, islog) {
   # Modify the sequence$sample vector to prepend "X" only to numeric labels
-  # sequence$sample <- ifelse(grepl("^[0-9]+$", sequence$sample), 
-  #                          paste0("X", sequence$sample), 
-  #                          sequence$sample)
+  rownames(sequence) <- ifelse(grepl("^[0-9]+$", rownames(sequence)), 
+                               paste0("X", rownames(sequence)), 
+                               rownames(sequence))
   
   # Perform data cleaning
   data[data == 0] <- NA
@@ -48,9 +48,9 @@ pcaplot <- function(data, sequence, islog) {
   # Create a data frame with the sample
   pca_df <- data.frame(
     sample = row.names(components),
+    group = as.factor(sequence$group),
     PC1 = pca_results$x[, "PC1"],
-    PC2 = pca_results$x[, "PC2"],
-    group = as.factor(sequence$group))
+    PC2 = pca_results$x[, "PC2"])
   
   # Create a data frame with the components
   PC_df <- data.frame(
@@ -62,10 +62,10 @@ pcaplot <- function(data, sequence, islog) {
   # Make a scree plot 
   scree_plot <- ggplot(PC_df, aes(x = PCs)) + 
     # Variance Explained
-    geom_point(aes(y = `Variance Explained`, color = "Variance Explained"), size = 1) + 
+    geom_point(aes(y = `Variance Explained`, color = "Variance Explained"), size = 2) + 
     geom_line(aes(y = `Variance Explained`, color = "Variance Explained"), linewidth = 1, linetype = "dashed") +
     # Cumulative Variance Explained
-    geom_point(aes(y = `Cumulative Variance Explained`, color = "Cumulative Variance Explained"), size = 1) +
+    geom_point(aes(y = `Cumulative Variance Explained`, color = "Cumulative Variance Explained"), size = 2) +
     geom_line(aes(y = `Cumulative Variance Explained`, color = "Cumulative Variance Explained"), linewidth = 1,linetype = "solid") +
     # Labels and title
     labs(title = "Scree Plot with Variance Explained and Cumulative Variance",
@@ -82,7 +82,7 @@ pcaplot <- function(data, sequence, islog) {
   # Create the PCA plot with rounded hover text for PC1 and PC2
   pca_plot <- ggplot(pca_df, aes(x = PC1, y = PC2, color = group)) + 
     geom_point(aes(text = paste("Sample: ", sample,
-                                "<br>group: ", group,
+                                "<br>Group: ", group,
                                 "<br>PC1: ", round(PC1, 2),
                                 "<br>PC2: ", round(PC2, 2))), size = 1) + 
     labs( # title = "PCA Plot",
@@ -115,6 +115,9 @@ pcaplot <- function(data, sequence, islog) {
         gridcolor = "#ffff"       # Grid line color
       )
     )
+  
+  print(str(pca_df))
+  print(str(sequence))
   
   # Display the interactive plotly PCA plot
   return(list(
