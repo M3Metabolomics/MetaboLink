@@ -475,17 +475,20 @@ shinyUI(dashboardPage(
                                                  tagList(
                                                    list(
                                                      tags$li("Add information regarding K-means analysis here.")))))),
+                                # Make a dropdown to select the PCA results from the reactive values 
+                                selectInput("kmeans_pca", "Choose PCA Results:", choices = NULL),
+                                # With the selected PCA results, make a drowdown to select the evaluation method
                                 selectInput("kmeans_eval_method", "Choose Evaluation Method:",  # Dropdown to select evaluation method for K-means
-                                            choices = c("Within Sum of Square (WSS)" = "wss", "Silhouette" = "silhouette", "Gap Statistic" = "gap_stat")),
+                                            choices = c("Within Sum of Square (WSS)" = "wss",
+                                                        "Silhouette" = "silhouette",
+                                                        "Gap Statistic" = "gap_stat")),
                                 actionButton("compute_kmeans_eval", "Compute Evaluation"),      # Button to compute K-means evaluation
                                 plotlyOutput("kmeans_eval_plot"),                                # Output for K-means evaluation plot
-                                numericInput("num_clusters", "Number of Clusters (k):", value = 3, min = 1),  # Input for number of clusters
+                                numericInput("num_clusters", "Number of Clusters (k):", value = 3, min = 1, step = 1),  # Input for number of clusters
                                 numericInput("percentile_threshold", "Percentile Threshold:", value = 95, min = 0, max = 100, step = 1), # Input for percentile threshold
                                 actionButton("run_kmeans", "Run K-means"),                      # Button to run K-means
                                 plotlyOutput("kmeans_plot"),                                    # Output for K-means plot
-                                DTOutput("kmeans_outliers"),                                    # Output for K-means outliers table
-                                actionButton("remove_kmeans_outliers", "Remove Selected Outliers"),  # Button to remove selected K-means outliers
-                                actionButton("save_cleaned_kmeans", "Save Cleaned Data")        # Button to save cleaned K-means data
+                                DTOutput("kmeans_outliers")                                    # Output for K-means outliers table
                        ),
                        tabPanel("Hierarchical",
                                 fluidRow(
@@ -504,9 +507,7 @@ shinyUI(dashboardPage(
                                 plotlyOutput("hclust_plot"),                                      # Output for hierarchical clustering plot
                                 plotlyOutput("conf_matrix_plot"),                                 # Output for confusion matrix plot
                                 plotlyOutput("dendrogram_plot"),                                  # Output for dendrogram plot
-                                DTOutput("hierarchical_outliers"),                                # Output for hierarchical outliers table
-                                actionButton("remove_hierarchical_outliers", "Remove Selected Outliers"),  # Button to remove selected hierarchical outliers
-                                actionButton("save_cleaned_hierarchical", "Save Cleaned Data")    # Button to save cleaned hierarchical data
+                                DTOutput("hierarchical_outliers")                                # Output for hierarchical outliers table
                        ),
                        tabPanel("DBSCAN",
                                 fluidRow(
@@ -514,16 +515,14 @@ shinyUI(dashboardPage(
                                                  tagList(
                                                    list(
                                                      tags$li("Add information regarding DBSCAN analysis here.")))))),
-                                numericInput("knn", "Choose k for kNN Distance Plot:", value = 5, min = 1),  # Input for k in kNN
+                                numericInput("knn", "Choose k for kNN Distance Plot:", value = 5, min = 1, step = 1),  # Input for k in kNN
                                 actionButton("compute_knn", "Compute kNN Distance Plot"),                   # Button to compute kNN distance plot
                                 plotlyOutput("knn_plot"),                                                    # Output for kNN plot
                                 numericInput("eps", "Choose epsilon for DBSCAN:", value = 0.5, min = 0.01, step = 0.1),  # Input for epsilon in DBSCAN
                                 numericInput("min_pts_dbscan", "Choose minPts for DBSCAN:", value = 5, min = 1),  # Input for minPts in DBSCAN
                                 actionButton("run_dbscan", "Run DBSCAN"),                                   # Button to run DBSCAN
                                 plotlyOutput("dbscan_plot"),                                                # Output for DBSCAN plot
-                                DTOutput("dbscan_outliers"),                                                # Output for DBSCAN outliers table
-                                actionButton("remove_dbscan_outliers", "Remove Selected Outliers"),         # Button to remove selected DBSCAN outliers
-                                actionButton("save_cleaned_dbscan", "Save Cleaned Data")                   # Button to save cleaned DBSCAN data
+                                DTOutput("dbscan_outliers")                                                # Output for DBSCAN outliers table
                        ),
                        tabPanel("HDBSCAN",
                                 fluidRow(
@@ -535,9 +534,7 @@ shinyUI(dashboardPage(
                                 numericInput("threshold_hdbscan", "Outlier Threshold for HDBSCAN:", value = 0.85, min = 0.01, max = 1),  # Input for outlier threshold in HDBSCAN
                                 actionButton("run_hdbscan", "Run HDBSCAN"),                                          # Button to run HDBSCAN
                                 plotlyOutput("hdbscan_plot"),                                                        # Output for HDBSCAN plot
-                                DTOutput("hdbscan_outliers"),                                                        # Output for HDBSCAN outliers table
-                                actionButton("remove_hdbscan_outliers", "Remove Selected Outliers"),                 # Button to remove selected HDBSCAN outliers
-                                actionButton("save_cleaned_hdbscan", "Save Cleaned Data")                            # Button to save cleaned HDBSCAN data
+                                DTOutput("hdbscan_outliers")                                                        # Output for HDBSCAN outliers table
                        ),
                        tabPanel("OPTICS",
                                 fluidRow(
@@ -552,9 +549,7 @@ shinyUI(dashboardPage(
                                 plotOutput("optics_reachability_plot"),                                      # Output for OPTICS reachability plot
                                 plotOutput("reachability_plot_threshold"),                                   # Output for reachability plot threshold
                                 plotlyOutput("cluster_plot"),                                                # Output for cluster plot
-                                DTOutput("optics_outliers"),                                                 # Output for OPTICS outliers table
-                                actionButton("remove_optics_outliers", "Remove Selected Outliers"),          # Button to remove selected OPTICS outliers
-                                actionButton("save_cleaned_optics", "Save Cleaned Data")                     # Button to save cleaned OPTICS data
+                                DTOutput("optics_outliers")                                                 # Output for OPTICS outliers table
                        ),
                        tabPanel("LOF",
                                 fluidRow(
@@ -567,9 +562,7 @@ shinyUI(dashboardPage(
                                 actionButton("run_lof", "Run LOF"),                                                    # Button to run LOF
                                 plotlyOutput("lof_plot"),                                                             # Output for LOF plot
                                 plotlyOutput("lof_od_plot"),                                                          # Output for LOF outlier detection plot
-                                DTOutput("lof_outliers"),                                                             # Output for LOF outliers table
-                                actionButton("remove_lof_outliers", "Remove Selected Outliers"),                      # Button to remove selected LOF outliers
-                                actionButton("save_cleaned_lof", "Save Cleaned Data")                                 # Button to save cleaned LOF data
+                                DTOutput("lof_outliers")                                                             # Output for LOF outliers table
                        )
                      )),
             tabPanel("GO Term analysis",

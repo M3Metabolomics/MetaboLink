@@ -9,17 +9,18 @@ pcaplot <- function(data, sequence, islog) {
   data <- na.omit(data)
   
   # Check if sequence$sample is identical to colnames(data)
-  shinyCatch({
-    identical_check <- if (identical(rownames(sequence), colnames(data))) {
-      "The two are identical."
-      } else {
-        "The two are NOT identical."
-        }
-    print(identical_check)  # Print result of the comparison
-    },
-    blocking_level = 'warning',  # Block warnings
-    shiny = FALSE  # Do not run in shiny
-    )
+  # shinyCatch({
+  #   identical_check <- if (identical(rownames(sequence), colnames(data))) {
+  #     "The two are identical."
+  #     } else {
+  #       "The two are NOT identical."
+  #       }
+  #   print(identical_check)  # Print result of the comparison
+  #   },
+  #   blocking_level = 'warning',  # Block warnings
+  #   shiny = FALSE  # Do not run in shiny
+  #   )
+  
   # Check if data is log-transformed 
   shinyCatch({ # Catch shiny errors
       ifelse(islog, data <- t(data), data <- log(t(data))) # Log transform data
@@ -30,13 +31,10 @@ pcaplot <- function(data, sequence, islog) {
   
   # run PCA 
   pca_results <- prcomp(data, rank. = NULL, center = T, scale = F)
-  # Calculate proportion of variance
-  pov <- summary(pca_results)[["importance"]]["Proportion of Variance", ]
-  pov <- pov * 100
-  pov
+  # Calculate proportion of variance in percentage
+  pov <- summary(pca_results)[["importance"]]["Proportion of Variance", ] * 100
   # Calculate cumulative proportion of variance
   cpov <- cumsum(pov)
-  cpov
   # Extract components
   components <- pca_results[["x"]]
   components <- as.data.frame(components)
@@ -44,7 +42,6 @@ pcaplot <- function(data, sequence, islog) {
   label <- paste0(row.names(components), ": ", sequence)
   # Make color palette
   col <- colorRampPalette(RColorBrewer::brewer.pal(8, "Set1"))(length(unique(sequence$group)))
-  col
   # Create a data frame with the sample
   pca_df <- data.frame(
     sample = row.names(components),
@@ -77,7 +74,6 @@ pcaplot <- function(data, sequence, islog) {
     scale_x_continuous(breaks = seq(0, max(PC_df$PC, na.rm = TRUE)+1, by = 5)) + 
     theme_bw()
   scree_plot_plotly <- ggplotly(scree_plot)
-  scree_plot_plotly
   
   # Create the PCA plot with rounded hover text for PC1 and PC2
   pca_plot <- ggplot(pca_df, aes(x = PC1, y = PC2, color = group)) + 
@@ -86,8 +82,8 @@ pcaplot <- function(data, sequence, islog) {
                                 "<br>PC1: ", round(PC1, 2),
                                 "<br>PC2: ", round(PC2, 2))), size = 1) + 
     labs( # title = "PCA Plot",
-      x = paste0("PC1 (", round(pov[1], digits = 2), "% explained var.)"),
-      y = paste0("PC2 (", round(pov[2], digits = 2), "% explained var.)")) +
+      x = paste0("PC1 (", round(PC_df[1,2], digits = 2), "% explained var.)"),
+      y = paste0("PC2 (", round(PC_df[2,2], digits = 2), "% explained var.)")) +
     theme_bw() +
     scale_color_manual(values = col)
   
@@ -102,27 +98,25 @@ pcaplot <- function(data, sequence, islog) {
       plot_bgcolor = "#e5ecf6",
       # X-axis customization
       xaxis = list(
-        title = paste0("PC1 (", round(pov[1], digits = 2), "% explained var.)"), # Title for PC1
+        title = paste0("PC1 (", round(PC_df[1,2], digits = 2), "% explained var.)"), # Title for PC1
         zerolinecolor = "#ffff", # Zero line color
         zerolinewidth = 2,       # Zero line width
         gridcolor = "#ffff"       # Grid line color
       ),
       # Y-axis customization
       yaxis = list(
-        title = paste0("PC2 (", round(pov[2], digits = 2), "% explained var.)"), # Title for PC2
+        title = paste0("PC2 (", round(PC_df[2,2], digits = 2), "% explained var.)"), # Title for PC2
         zerolinecolor = "#ffff", # Zero line color
         zerolinewidth = 2,       # Zero line width
         gridcolor = "#ffff"       # Grid line color
       )
     )
   
-  print(str(pca_df))
-  print(str(sequence))
-  
   # Display the interactive plotly PCA plot
   return(list(
-    pca_plot_plotly = pca_plot_plotly,
-    scree_plot_plotly = scree_plot_plotly,
-    pca_df = pca_df
+    pca_plotly = pca_plot_plotly,
+    scree_plotly = scree_plot_plotly,
+    pca_df = pca_df,
+    PC_df = PC_df
   ))
 }

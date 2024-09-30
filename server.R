@@ -11,7 +11,8 @@ shinyServer(function(session, input, output) {
                        choices = NULL, # List of choices
                        drift_plot_select = 1, # Drift plot selection
                        info = vector("character"), # Vector of info
-                       pca_results = list()) # List of PCA results
+                       pca_results = list(), # List of PCA results
+                       outlier_df = list()) # List of outlier data frames
 
   userConfirmation <- reactiveVal(FALSE)
   disable("upload")
@@ -879,15 +880,11 @@ observeEvent(input$mergeDatasets, {
         data <- rv$data[[sd]] # Set data to the selected dataset
         seq <- rv$sequence[[sd]] # Set sequence to the selected sequence
       }
-      # Debugging statements
-      cat("Data dimensions:", dim(data), "\n")
-      cat("Sequence dimensions:", dim(seq), "\n")
-      cat("Colnames sequence:", colnames(seq), "\n")
       
       if ("Sample"  %in% seq[, "labels"]) { # Check if the sequence file contains a "Sample" column
-        cat("Sequence contains 'labels' column with samples, blank and QC.\n")
+        # cat("Sequence contains 'labels' column with samples, blank and QC.\n")
         if (any(seq[, "labels"] %in% "QC")) { # Check if the sequence file contains a "QC" column
-          cat("Sequence contains 'QC' labels. Updating group column.\n")
+          # cat("Sequence contains 'QC' labels. Updating group column.\n")
           seq[seq[, "labels"] %in% "QC", "group"] <- "QC" # Set the "QC" column to "QC"
           
         } else {
@@ -897,30 +894,33 @@ observeEvent(input$mergeDatasets, {
         data_subset <- data[seq[, "labels"] %in% c("Sample", "QC")] # Get the data for the samples and QC
         rownames(data_subset) <- make.unique(as.character(data[, "Name"]))
         
-        # Debugging for subset
-        cat("Data subset dimensions:", dim(data_subset), "\n")
-        if (nrow(data_subset) == 0) {
-          cat("Warning: data_subset is empty!\n")
-        }
-        
         seq_subset <- seq[seq[, "labels"] %in% c("Sample", "QC"), ] # Get the sequence for the samples and QC
         
-        # Debugging for sequence subset
-        cat("Sequence subset dimensions:", dim(seq_subset), "\n")
-        if (nrow(seq_subset) == 0) {
-          cat("Warning: seq_subset is empty!\n")
-        }
+        # Save the PCA results to pca_results
+        pca_result <- pcaplot(data_subset, seq_subset, input$pca1_islog)
         
-        # 
-        pca_results <- pcaplot(data_subset, seq_subset, input$pca1_islog)
+        # Generate a unique name for the PCA result from the
+        dataset_name <- names(rv$data)[sd]
+        timestamp <- format(Sys.time(), "%H%M%S")  # Timestamp for uniqueness
+        pca_name <- paste0(dataset_name, "_pca_", timestamp)
+        pc_name <- paste0(dataset_name, "_PC_", timestamp)
         
+        # Save the PCA and PC results as a named list for each PCA result
+        rv$pca_results[[pca_name]] <- list(pca_df = pca_result$pca_df,
+                                           PC_df = pca_result$PC_df)
+        
+        
+        # Debugging to show that rv$results is updated
+        # cat("PCA results saved as:", pca_name, "\n")
+        # cat("PCA results dimensions:", dim(rv$pca_results[[pca_name]]), "\n")
+        # print(str(rv$pca_results))
         
         output$plotpca1 <- renderPlotly({
-          pca_results$pca_plot_plotly
+          pca_result$pca_plotly
         })
         
         output$plotscree1 <- renderPlotly({
-          pca_results$scree_plot_plotly
+          pca_result$scree_plotly
         })
 
         if (sum(seq[, 1] %in% "QC") > 0) {
@@ -965,15 +965,30 @@ observeEvent(input$mergeDatasets, {
       
       seq_subset <- seq[seq[, "labels"] %in% c("Sample", "QC"), ] # Get the sequence for the samples and QC
       
-      # 
-      pca_results <- pcaplot(data_subset, seq_subset, input$pca1_islog)
+      # Save the PCA results to pca_results
+      pca_result <- pcaplot(data_subset, seq_subset, input$pca1_islog)
+      
+      # Generate a unique name for the PCA result from the
+      dataset_name <- names(rv$data)[sd]
+      timestamp <- format(Sys.time(), "%H%M%S")  # Timestamp for uniqueness
+      pca_name <- paste0(dataset_name, "_pca_", timestamp)
+      pc_name <- paste0(dataset_name, "_PC_", timestamp)
+      
+      # Save the PCA and PC results as a named list for each PCA result
+      rv$pca_results[[pca_name]] <- list(pca_df = pca_result$pca_df,
+                                         PC_df = pca_result$PC_df)
+      
+      # Debugging to show that rv$results is updated
+      # cat("PCA results saved as:", pca_name, "\n")
+      # cat("PCA results dimensions:", dim(rv$pca_results[[pca_name]]), "\n")
+      # print(str(rv$pca_results[[pca_name]]))
       
       output$plotpca2 <- renderPlotly({
-        pca_results$pca_plot_plotly
+        pca_result$pca_plotly
       })
       
       output$plotscree2 <- renderPlotly({
-        pca_results$scree_plot_plotly
+        pca_result$scree_plotly
       })
 
       if (sum(seq$labels %in% "QC") > 0) {
@@ -1132,24 +1147,112 @@ observeEvent(input$mergeDatasets, {
       }
     }
   })
-
+  
+  # PCA results update 
+  # Whenever pca_results are updated, update the selectInput choices
+  observe({
+    updateSelectInput(session, c("kmeans_pca"), choices = names(rv$pca_results))
+  })
+  
+  # Outlier Detection 
+  # kmeans
+  observeEvent(input$compute_kmeans_eval, {
+    # Fetch the PCA data from the reactive values
+    pca_data <- rv$pca_results[[input$kmeans_pca]]  # Fetch the selected PCA result (list)
+    
+    # Check if PCA data is available and extract it
+    if (!is.null(pca_data)) {
+      pca_df <- pca_data[[1]]  # Extract the pca_df directly from the list
+      
+      # Get the evaluation method selected by the user
+      method <- input$kmeans_eval_method
+      
+      # Check that the method is valid
+      if (!is.null(method)) {
+        # Use the selected evaluation method to create the plot
+        eval_plot <- switch(method,
+                            "wss" = fviz_nbclust(pca_df[, c("PC1", "PC2")], kmeans, method = "wss", k.max = nrow(pca_df) - 1) +
+                              scale_x_discrete(breaks = seq(1, nrow(pca_df) - 1, by = 5)) +  # Reduce number of x-axis ticks
+                              labs(title = "Optimal number of clusters (Elbow Method)") +
+                              theme_bw(),
+                            "silhouette" = fviz_nbclust(pca_df[, c("PC1", "PC2")], kmeans, method = "silhouette", k.max = nrow(pca_df) - 1) + 
+                              scale_x_discrete(breaks = seq(1, nrow(pca_df) - 1, by = 5)) +  # Reduce number of x-axis ticks
+                              labs(title = "Optimal number of clusters (Silhouette Method)") +
+                              theme_bw(),
+                            "gap_stat" = fviz_nbclust(pca_df[, c("PC1", "PC2")], kmeans, method = "gap_stat", k.max = nrow(pca_df) - 1) +
+                              scale_x_discrete(breaks = seq(1, nrow(pca_df) - 1, by = 5)) +  # Reduce number of x-axis ticks
+                              labs(title = "Optimal number of clusters (Gap Statistic Method)") +
+                              theme_bw())
+        
+        # Render the evaluation plot in plotly
+        output$kmeans_eval_plot <- renderPlotly(ggplotly(eval_plot))
+      }
+    }
+  })
+  
+  
+  observeEvent(input$run_kmeans, {
+    # Fetch the selected PCA data
+    pca_data <- rv$pca_results[[input$kmeans_pca]]  # Fetch the selected PCA result (list)
+    
+    if (!is.null(pca_data)) {
+      pca_df <- pca_data[[1]]   # Extract pca_df from the list
+      PC_df <- pca_data[[2]]    # Extract PC_df from the list
+      k <- input$num_clusters   # Get the number of clusters (k)
+      percentile_threshold <- input$percentile_threshold  # Get the percentile threshold
+      
+      # Check if pca_df is a valid data frame
+      if (!is.null(pca_df) && is.data.frame(pca_df)) {
+        # Call the kmeans_clustering function to get the results
+        kmeans_results <- kmeans_clustering(pca_df, k, percentile_threshold, PC_df)
+        
+        # Generate a unique name for the K-means result from the selected PCA result name
+        pca_result_name <- input$kmeans_pca   # This gives the selected name from the dropdown
+        timestamp <- format(Sys.time(), "%Y%m%d_%H%M%S")  # Timestamp for uniqueness (date + time)
+        kmeans_name <- paste0(pca_result_name, "_Kmeans_", timestamp)
+        
+        # Save the K-means result (including outlier information) into the reactive value
+        rv$outlier_df[[kmeans_name]] <- list(kmeans_df = kmeans_results)
+        print(rv$outlier_df)
+        
+        # Render the K-means plot in the UI
+        output$kmeans_plot <- renderPlotly({
+          kmeans_results$kmeans_plotly  # Pass the interactive plotly object to renderPlotly
+        })
+        
+        # Render the K-means outlier table in the UI
+        output$kmeans_outliers <- renderDT({
+          datatable(kmeans_results$kmeans_df, options = list(pageLength = 20, autoWidth = TRUE))
+        })
+        
+      } else {
+        cat("Selected PCA result is not a valid data frame.\n")
+      }
+    } else {
+      cat("No PCA results selected or available.\n")
+    }
+  })
+  
+  
+  
+  # Summary of data
   observe({ 
     if (!is.null(rv$activeFile)) {
       seq <- rv$sequence[[rv$activeFile]]
       dat <- rv$data[[rv$activeFile]]
-      blank_mv <- sum(is.na(dat[seq[, 1] %in% "Blank"])) +
-                    sum(dat[seq[, 1] %in% "Blank"] == 0, na.rm = TRUE)
-      qc_mv <- sum(is.na(dat[seq[, 1] %in% "QC"])) +
-                    sum(dat[seq[, 1] %in% "QC"] == 0, na.rm = TRUE)
-      sample_mv <- sum(is.na(dat[seq[, 1] %in% "Sample"])) +
-                    sum(dat[seq[, 1] %in% "Sample"] == 0, na.rm = TRUE)
+      blank_mv <- sum(is.na(dat[seq[, "labels"] %in% "Blank"])) +
+                    sum(dat[seq[, "labels"] %in% "Blank"] == 0, na.rm = TRUE)
+      qc_mv <- sum(is.na(dat[seq[, "labels"] %in% "QC"])) +
+                    sum(dat[seq[, "labels"] %in% "QC"] == 0, na.rm = TRUE)
+      sample_mv <- sum(is.na(dat[seq[, "labels"] %in% "Sample"])) +
+                    sum(dat[seq[, "labels"] %in% "Sample"] == 0, na.rm = TRUE)
 
-      data_subset <- dat[seq[, 1] %in% "Sample"]
-      sclass <- seq[seq[, 1] %in% "Sample", ][, 4]
+      data_subset <- dat[seq[, "labels"] %in% "Sample"]
+      sclass <- seq[seq[, "labels"] %in% "Sample", ][, "group"]
 
       if (sum(seq$labels %in% "QC") > 0) {
         qccv <- paste0("CV in QC samples: ",
-                      round(cvmean(dat[seq[, 1] %in% "QC"]), 2), "</br>")
+                      round(cvmean(dat[seq[, "labels"] %in% "QC"]), 2), "</br>")
       } else {
         qccv <- "No QC in dataset </br>"
       }
@@ -1169,13 +1272,19 @@ observeEvent(input$mergeDatasets, {
         HTML("<h3>", names(rv$data)[rv$activeFile], "</h3>")
       })
       output$info_ui <- renderUI({
-        HTML(nrow(dat) - 1, " features.<br>", ncol(dat[seq[, 1] %in% "Sample"]), " samples.<br>", ncol(dat[seq[, 1] %in% "QC"]), " QC samples.<br>", ncol(dat[seq[, 1] %in% "Blank"]), " Blank samples.<br>", "<br>", sample_mv, " missing values in Samples<br>", qc_mv, " missing values in QC samples<br>", blank_mv, " missing values in Blank samples<br><br>")
+        HTML(nrow(dat) - 1, " features.<br>",
+             ncol(dat[seq[, "labels"] %in% "Sample"])," samples.<br>", 
+             ncol(dat[seq[, "labels"] %in% "QC"]), " QC samples.<br>", 
+             ncol(dat[seq[, "labels"] %in% "Blank"]), " Blank samples.<br>", "<br>", 
+             
+             sample_mv, " missing values in Samples<br>", 
+             qc_mv, " missing values in QC samples<br>", 
+             blank_mv, " missing values in Blank samples<br><br>")
       })
       output$cvinfo_ui <- renderUI({
         HTML(text)
       })
 
-      
       # Update statistics select input options
       groups <- na.omit(seq[, 'group'])
       time <- na.omit(seq[, 'time'])
