@@ -1,6 +1,24 @@
 #---------------------------------------------------------#
 #                   OUTLIER DETECTION                     # 
 #---------------------------------------------------------#
+# Load required libraries
+library(ggplot2)
+library(dbscan)
+library(fpc)
+library(plotly)
+library(factoextra)
+library(caret)
+library(ggdendro)
+library(reshape2)
+library(car)
+library(heatmaply)
+library(party)
+library(rpart)
+library(rpart.plot)
+library(ROCR)
+library(randomForest)
+library(Rlof)
+
 #### Outlier Detection ----
 #### K-means clustering ----
 library(factoextra)
@@ -238,4 +256,92 @@ perform_dendrogram <- function(pca_df, sequence, method = "complete", threshold)
          y = "Height (Distance)")
   
   ggplotly(dend_plot)
+}
+
+#### DBSCAN clustering ----
+
+perform_kNN_dist_plot <- function(PCA.df, k) {
+  # Ensure k is numeric and within valid range
+  if (!is.numeric(k) || k <= 0 || k > nrow(PCA.df)) {
+    stop("Invalid k value for kNN distance plot")
+  }
+  
+  # Debugging information
+  print(paste("k value:", k))
+  print(paste("Dimensions of PCA.df:", dim(PCA.df)))
+  
+  # Compute kNN distances
+  kNN_dist <- dbscan::kNNdist(PCA.df[, c("PC1","PC2")], k = k)
+  
+  # Debugging information
+  print(head(kNN_dist))
+  
+  # Create a data frame for plotting
+  kNN_dist_df <- data.frame(Distance = sort(kNN_dist))
+  kNN_dist_df$Index <- seq_len(nrow(kNN_dist_df))
+  
+  # Manually create the kNN distance plot using ggplot2
+  kNN_plot <- ggplot(kNN_dist_df, aes(x = Index, y = Distance)) +
+    geom_line() +
+    geom_hline(yintercept = mean(kNN_dist), color = "red", linetype = "dashed") +
+    labs(title = paste("kNN Distance Plot for k =", k), x = "Points sorted by distance", y = "kNN Distance") +
+    theme_bw()
+  
+  return(ggplotly(kNN_plot))
+}
+
+# DBSCAN Function
+perform_dbscan_clustering <- function(PCA.df, eps, minPts) {
+  # Ensure eps and minPts are numeric
+  if (!is.numeric(eps) || eps <= 0) {
+    stop("Invalid eps value for DBSCAN")
+  }
+  if (!is.numeric(minPts) || minPts <= 0) {
+    stop("Invalid minPts value for DBSCAN")
+  }
+  
+  dbscan_res <- dbscan::dbscan(PCA.df[, c("PC1","PC2")], eps = eps, minPts = minPts)
+  
+  plot_data <- data.frame(Sample = rownames(PCA.df), 
+                          PC1 = PCA.df$PC1,
+                          PC2 = PCA.df$PC2,
+                          Cluster = factor(dbscan_res$cluster),
+                          Outlier = ifelse(dbscan_res$cluster == 0, "Outlier", "Inlier"))
+  
+  DBSCAN_plot <- ggplot(plot_data, aes(text = Sample, x = PC1, y = PC2, color = Cluster)) +
+    geom_point() +
+    labs(title = paste("DBSCAN Clustering - eps:", eps, "- minPts:", minPts), x = "PC1", y = "PC2", color = "Cluster") +
+    theme_bw()
+  
+  list(
+    dbscan_plot = ggplotly(DBSCAN_plot),
+    dbscan_outliers = plot_data
+  )
+}
+#### HDBSCAN clustering ----
+library(dbscan)
+perform_hdbscan_clustering <- function(PCA.df, minPts) {
+  # Ensure minPts is numeric
+  if (!is.numeric(minPts) || minPts <= 0) {
+    stop("Invalid minPts value for HDBSCAN")
+  }
+  
+  res_hdbscan <- hdbscan(dist(PCA.df[, c("PC1","PC2")], method = "euclidean"), minPts = minPts)
+  
+  plot_data <- data.frame(Sample = rownames(PCA.df), 
+                          PC1 = PCA.df$PC1,
+                          PC2 = PCA.df$PC2,
+                          Cluster = factor(res_hdbscan$cluster),
+                          OutlierScore = res_hdbscan$outlier_scores)
+  
+  HDBSCAN_plot <- ggplot(plot_data, aes(x = PC1, y = PC2, color = Cluster, text = Sample, outlierscore = OutlierScore)) +
+    geom_point(pch = 19) +
+    labs(title = paste("HDBSCAN Clustering - MinPts:", minPts), x = "PC1", y = "PC2", color = "Cluster", size = "Outlier Score") +
+    theme_bw() +
+    guides(color = guide_legend(override.aes = list(size = 4)), size = guide_legend(override.aes = list(alpha = 0.5)))
+  
+  list(
+    hdbscan_plot = ggplotly(HDBSCAN_plot),
+    hdbscan_outliers = plot_data
+  )
 }

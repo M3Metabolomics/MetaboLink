@@ -517,10 +517,12 @@ shinyUI(dashboardPage(
                                                  tagList(
                                                    list(
                                                      tags$li("Add information regarding DBSCAN analysis here.")))))),
+                                # Make a dropdown to select the PCA results from the reactive values 
+                                selectInput("dbscan_pca", "Choose PCA Results:", choices = NULL),
                                 numericInput("knn", "Choose k for kNN Distance Plot:", value = 5, min = 1, step = 1),  # Input for k in kNN
                                 actionButton("compute_knn", "Compute kNN Distance Plot"),                   # Button to compute kNN distance plot
                                 plotlyOutput("knn_plot"),                                                    # Output for kNN plot
-                                numericInput("eps", "Choose epsilon for DBSCAN:", value = 0.5, min = 0.01, step = 0.1),  # Input for epsilon in DBSCAN
+                                numericInput("eps", "Choose epsilon for DBSCAN:", value = 3, min = 0.01, step = 0.1),  # Input for epsilon in DBSCAN
                                 numericInput("min_pts_dbscan", "Choose minPts for DBSCAN:", value = 5, min = 1),  # Input for minPts in DBSCAN
                                 actionButton("run_dbscan", "Run DBSCAN"),                                   # Button to run DBSCAN
                                 plotlyOutput("dbscan_plot"),                                                # Output for DBSCAN plot
@@ -532,6 +534,8 @@ shinyUI(dashboardPage(
                                                  tagList(
                                                    list(
                                                      tags$li("Add information regarding HDBSCAN analysis here.")))))),
+                                # Make a dropdown to select the PCA results from the reactive values 
+                                selectInput("hdbscan_pca", "Choose PCA Results:", choices = NULL),
                                 numericInput("min_pts_hdbscan", "Choose minPts for HDBSCAN:", value = 5, min = 1),  # Input for minPts in HDBSCAN
                                 numericInput("threshold_hdbscan", "Outlier Threshold for HDBSCAN:", value = 0.85, min = 0.01, max = 1),  # Input for outlier threshold in HDBSCAN
                                 actionButton("run_hdbscan", "Run HDBSCAN"),                                          # Button to run HDBSCAN
@@ -544,6 +548,8 @@ shinyUI(dashboardPage(
                                                  tagList(
                                                    list(
                                                      tags$li("Add information regarding OPTICS analysis here.")))))),
+                                # Make a dropdown to select the PCA results from the reactive values 
+                                selectInput("optics_pca", "Choose PCA Results:", choices = NULL),
                                 numericInput("min_pts_optics", "Choose minPts for OPTICS:", value = 5, min = 1),  # Input for minPts in OPTICS
                                 numericInput("eps_optics", "Choose eps for OPTICS (optional):", value = NA, min = 0.1, step = 0.1),  # Input for eps in OPTICS
                                 numericInput("eps_cl_optics", "Choose cutoff (eps_cl) for OPTICS:", value = 0.5, min = 0.1, step = 0.1),  # Input for eps_cl in OPTICS
@@ -559,6 +565,8 @@ shinyUI(dashboardPage(
                                                  tagList(
                                                    list(
                                                      tags$li("Add information regarding LOF analysis here.")))))),
+                                # Make a dropdown to select the PCA results from the reactive values 
+                                selectInput("lof_pca", "Choose PCA Results:", choices = NULL),
                                 numericInput("lof_threshold", "Threshold for LOF:", value = 1.5, min = 0, step = 0.1),  # Input for threshold in LOF
                                 numericInput("lof_k", "k for LOF:", value = 4, min = 1),                                 # Input for k in LOF
                                 actionButton("run_lof", "Run LOF"),                                                    # Button to run LOF

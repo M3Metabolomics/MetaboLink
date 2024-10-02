@@ -626,7 +626,6 @@ shinyServer(function(session, input, output) {
     updateDataAndSequence("Filtrate first", input$mvf_newsave, "_mvr", additionalInfo)
   })
 
-
   ## Imputation ##
 
   observeEvent(input$runImputation, {
@@ -753,8 +752,8 @@ shinyServer(function(session, input, output) {
     })
     removeModal()
   })
-
-observeEvent(input$mergeDatasets, {
+  
+  observeEvent(input$mergeDatasets, {
     if (is.null(rv$activeFile)) {
       showNotification("No data", type = "error")
     } else {
@@ -1159,7 +1158,7 @@ observeEvent(input$mergeDatasets, {
   })
   
   # PCA results update 
-  # Whenever pca_results are updated, update the selectInput choices
+  # Whenever pca_results are updated, update the selectInput choices for outlier detection
   observe({
     updateSelectInput(session, "kmeans_pca", choices = names(rv$pca_results))
   })
@@ -1168,6 +1167,21 @@ observeEvent(input$mergeDatasets, {
     updateSelectInput(session, "hierarchical_pca", choices = names(rv$pca_results))
   })
   
+  observe({
+    updateSelectInput(session, "dbscan_pca", choices = names(rv$pca_results))
+  })
+  
+  observe({
+    updateSelectInput(session, "hdbscan_pca", choices = names(rv$pca_results))
+  })
+  
+  observe({
+    updateSelectInput(session, "optics_pca", choices = names(rv$pca_results))
+  })
+  
+  observe({
+    updateSelectInput(session, "lof_pca", choices = names(rv$pca_results))
+  })
   
   # Outlier Detection 
   # kmeans
@@ -1305,6 +1319,147 @@ observeEvent(input$mergeDatasets, {
     }
   })
   
+  # DBSCAN Clustering
+  # Compute kNN distance plot
+  observeEvent(input$compute_knn, {
+    req(rv$pca_results[[input$dbscan_pca]])  # Ensure PCA data is loaded
+    pca_data <- rv$pca_results[[input$dbscan_pca]]  # Fetch the selected PCA result (list)
+    pca_df <- pca_data[[1]]  # Extract pca_df from the list
+    k <- input$knn
+    
+    # Debug print
+    print(paste("Computing kNN distance plot with k =", k))
+    
+    output$knn_plot <- renderPlotly({
+      perform_kNN_dist_plot(pca_df, k)
+    })
+  })
+  
+  # Run DBSCAN
+  observeEvent(input$run_dbscan, {
+    req(rv$pca_results[[input$dbscan_pca]])  # Ensure PCA data is loaded
+    pca_data <- rv$pca_results[[input$dbscan_pca]]  # Fetch the selected PCA result (list)
+    pca_df <- pca_data[[1]]  # Extract pca_df from the list
+    
+    eps <- input$eps
+    min_pts <- input$min_pts_dbscan
+    
+    # Debug print
+    print(paste("Running DBSCAN with eps =", eps, "and minPts =", min_pts))
+    
+    dbscan_res <- perform_dbscan_clustering(pca_df, eps, min_pts)
+
+    dbscan_res$dbscan_outliers <- dbscan_res$dbscan_outliers %>%
+      rename(Category = Outlier)
+    
+    output$dbscan_plot <- renderPlotly({
+      dbscan_res$dbscan_plot
+    })
+    
+    print(head(dbscan_res$dbscan_outliers))
+    
+    print(names(dbscan_res$dbscan_outliers))
+    
+    output$dbscan_outliers <- renderDT({
+      datatable(dbscan_res$dbscan_outliers %>%
+                  select(Sample, PC1, PC2, Cluster, Category), options = list(pageLength = 10))
+    })
+  })
+  
+  # Run HDBSCAN
+  observeEvent(input$run_hdbscan, {
+    req(rv$pca_results[[input$dbscan_pca]])  # Ensure PCA data is loaded
+    pca_data <- rv$pca_results[[input$dbscan_pca]]  # Fetch the selected PCA result (list)
+    pca_df <- pca_data[[1]]  # Extract pca_df from the list
+    min_pts <- input$min_pts_hdbscan
+    threshold <- input$threshold_hdbscan
+    
+    print(paste("Running HDBSCAN with minPts =", min_pts))
+    
+    hdbscan_res <- perform_hdbscan_clustering(pca_df, min_pts)
+    hdbscan_outliers(hdbscan_res$hdbscan_outliers)
+    
+    # Add categorization column based on threshold
+    if (nrow(hdbscan_outliers()) > 0 && "OutlierScore" %in% names(hdbscan_outliers())) {
+      hdbscan_outliers(hdbscan_outliers() %>%
+                         mutate(Category = ifelse(OutlierScore > threshold, "Outlier", "Inlier")))
+    } else {
+      showNotification("HDBSCAN results are empty or do not contain 'OutlierScore' column.", type = "error")
+    }
+    
+    output$hdbscan_plot <- renderPlotly({
+      hdbscan_res$hdbscan_plot
+    })
+    output$hdbscan_outliers <- renderTable({
+      hdbscan_outliers()[, !names(hdbscan_outliers()) %in% c("PC1", "PC2")]
+    })
+  })
+  
+  # Run OPTICS
+  observeEvent(input$run_optics, {
+    req(pca_result())
+    PCA.df <- pca_result()$PCA.df
+    min_pts <- input$min_pts_optics
+    eps <- if (is.na(input$eps_optics)) NULL else input$eps_optics
+    eps_cl <- input$eps_cl_optics
+    
+    print(paste("Running OPTICS with minPts =", min_pts, ", eps =", eps, ", and eps_cl =", eps_cl))
+    
+    tryCatch({
+      optics_res <- perform_optics_analysis(PCA.df, eps, min_pts, eps_cl)
+      optics_results(optics_res)
+      
+      optics_res$optics_outliers <- optics_res$optics_outliers %>%
+        rename(Category = Outlier)
+      
+      output$optics_reachability_plot <- renderPlot({
+        optics_res$reachability_plot()
+      })
+      
+      output$reachability_plot_threshold <- renderPlot({
+        optics_res$reachability_plot_threshold()
+      })
+      
+      output$cluster_plot <- renderPlot({
+        optics_res$cluster_plot()
+      })
+      
+      output$optics_outliers <- renderTable({
+        optics_res$optics_outliers
+      })
+    }, error = function(e) {
+      showNotification(paste("Error:", e$message), type = "error")
+      print(paste("Error:", e$message))
+    })
+  })
+  
+  # Run LOF
+  observeEvent(input$run_lof, {
+    req(pca_result())
+    PCA.df <- pca_result()$PCA.df
+    PCA.df$Sample <- rownames(PCA.df) # Ensure Sample column is present
+    
+    threshold <- input$lof_threshold
+    k <- input$lof_k
+    
+    lof_res <- calculate_and_plot_lof(PCA.df, threshold = threshold, k = k)
+    lof_result(lof_res)
+    
+    lof_res$lof_outliers <- lof_res$lof_outliers %>%
+      rename(Category = Outlier_Detection)
+    
+    output$lof_plot <- renderPlotly({
+      lof_res$lof_plotly
+    })
+    
+    output$lof_od_plot <- renderPlotly({
+      lof_res$lof_od_plotly
+    })
+    
+    output$lof_outliers <- renderTable({
+      lof_res$lof_outliers
+    })
+  })
   
   # Summary of data
   observe({ 
@@ -1372,7 +1527,6 @@ observeEvent(input$mergeDatasets, {
     }
   })
 
-
   ## Normalization ##
 
   observeEvent(input$normalize, {
@@ -1407,7 +1561,6 @@ observeEvent(input$mergeDatasets, {
     updateDataAndSequence("Normalize first", input$newFileNorm, "_normalized", additionalInfo)
   })
 
-
   ## Transformation ##
 
   observeEvent(input$transform, {
@@ -1437,7 +1590,6 @@ observeEvent(input$mergeDatasets, {
     )
     updateDataAndSequence("Transform first", input$newFileTransform, "_transformed", additionalInfo)
   })
-
 
   ## Statistical analysis ##
 
@@ -1567,7 +1719,6 @@ observeEvent(input$mergeDatasets, {
       )
     })
   })
-
 
   ## Send data to PolySTest and VSClust ##
 
