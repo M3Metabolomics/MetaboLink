@@ -91,4 +91,151 @@ kmeans_clustering <- function(pca_df, k, percentile_threshold, PC_df) {
               kmeans_plotly = kmeans_plot_plotly))
 }
 
-#### 
+#### Hierarchical clustering ----
+library(ggdendro)
+perform_hierarchical_clustering <- function(pca_df, sequence, method = "complete", k = 3, threshold = 3) {
+  # Debugging to check and sequence
+  # print(head(sequence))
+  # Ensure rownames are unique
+  rownames(sequence) <- ifelse(grepl("^[0-9]+$", rownames(sequence)), 
+                               paste0("X", rownames(sequence)), 
+                               rownames(sequence))
+  
+  # Debugging to check pca_df and sequence
+  # print(head(pca_df))
+  # print(head(sequence))
+  
+  # Compute distance matrix and perform hierarchical clustering
+  data_dist <- dist(pca_df[, c("PC1", "PC2")])
+  hc <- hclust(data_dist, method = method)
+  
+  # Perform the clustering with k clusters
+  clusters <- cutree(hc, k = k)
+  
+  # Ensure clusters are in a factor that matches the 'group' levels in sequence
+  cluster_factors <- factor(clusters) 
+  
+  # Debugging to check clusters and cluster_factors
+  # cat("Clusters:\n", clusters, "\n")
+  # cat("Clusters Factor:\n", cluster_factors, "\n")
+  
+  # Custom color palette for clusters
+  col <- colorRampPalette(RColorBrewer::brewer.pal(8, "Set1"))(length(unique(cluster_factors)))
+  # cat("Color Palette: ", col, "\n")
+  
+  # Use scale_color_manual to apply the custom color palette
+  dimr_hier_plot <- ggplot(pca_df, aes(x = PC1, y = PC2, color = cluster_factors)) +
+    geom_point(shape = 16) +
+    labs(title = paste("Hierarchical Clustering -", method, "method"), x = "PC1", y = "PC2") +
+    scale_color_manual(values = col) +
+    theme_bw()
+  
+  # Convert hclust object to dendrogram
+  dend_data <- as.dendrogram(hc)
+  dendro_data <- dendro_data(dend_data)
+  
+  # Debugging to check dendro_data
+  # cat("Dendrogram Data: ", str(dendro_data), "\n")
+  
+  # Create hierarchical clustering dendrogram plot
+  hc_plot <- ggplot(dendro_data$segments) +
+    geom_segment(aes(x = x, y = y, xend = xend, yend = yend)) +
+    theme_bw() +
+    labs(title = paste("Hierarchical Clustering -", method, "method"),
+         x = "Data Points", 
+         y = "Height (Distance)")
+  
+  # Match dendrogram labels to PCA sample data
+  heights <- data.frame(label = dendro_data$labels$label, height = 0)
+  
+  # Ensure label heights are matched correctly
+  for (i in seq_along(dendro_data$segments$yend)) {
+    if (!is.na(dendro_data$segments$y[i])) {
+      label <- dendro_data$segments$x[i]
+      height <- dendro_data$segments$y[i]
+      if (label <= nrow(heights)) {
+        heights$height[label] <- height
+      }
+    }
+  }
+  
+  # Match heights with PCA data based on sample labels
+  heights_matched <- heights[match(pca_df$sample, heights$label), "height"]
+  
+  # Categorize samples based on threshold
+  hc_outliers <- data.frame(
+    Sample = pca_df$sample,
+    Cluster = cluster_factors,
+    Height = heights_matched,
+    Category = ifelse(heights_matched > threshold, "Outlier", "Inlier")  # Use the specified threshold
+  )
+  
+  # Return all plots and data as a list
+  return(list(
+    hclust_plot = ggplotly(dimr_hier_plot),
+    dendrogram_plot = ggplotly(hc_plot),
+    hierarchical_outliers = hc_outliers))
+}
+
+
+# Function for confusion matrix plot
+perform_confusion_matrix <- function(pca_df, sequence, method = "complete", k = 3) {
+  data_dist <- dist(pca_df[, c("PC1", "PC2")])
+  hc <- hclust(data_dist, method = method)
+  clusters <- cutree(hc, k = k)
+  
+  # Debugging to check clusters
+  cat("Clusters:\n", clusters, "\n")
+  
+  reference <- factor(sequence$group)
+  prediction <- factor(clusters, levels = levels(reference))
+  # Debug to check reference and prediction
+  cat("Reference:\n", reference, "\n")
+  cat("Prediction:\n", prediction, "\n")
+  
+  cm <- confusionMatrix(prediction, reference)
+  # debug to check confusion matrix
+  cat("Confusion Matrix:\n", cm$table, "\n")
+  
+  cm_df <- as.data.frame(cm$table)
+  cm_df$Reference <- factor(cm_df$Reference, levels = rev(levels(cm_df$Reference)))
+  
+  # Debugging to check cm_df
+  cat("Confusion Matrix Data Frame:\n", cm_df, "\n")
+  
+  cm_plot <- ggplot(cm_df, aes(x = Prediction, y = Reference, fill = Freq)) +
+    geom_tile() +
+    geom_text(aes(label = Freq)) +
+    scale_fill_gradient(low = "white", high = "firebrick") +
+    labs(x = "Prediction", y = "Reference") +
+    theme_bw()
+  
+  ggplotly(cm_plot)
+}
+
+
+# Dendrogram Function
+perform_dendrogram <- function(pca_df, sequence, method = "complete", threshold) {
+  data_dist <- dist(pca_df[, c("PC1", "PC2")])
+  hc <- hclust(data_dist, method = method)
+  
+  dend_data <- as.dendrogram(hc)
+  dendro_data <- dendro_data(dend_data)
+  
+  # Highlight segments above the threshold
+  dendro_data$segments$highlight <- dendro_data$segments$y > threshold | dendro_data$segments$yend > threshold
+  
+  dend_plot <- ggplot() + 
+    geom_segment(data = dendro_data$segments, aes(x = x, y = y, xend = xend, yend = yend, color = highlight)) +
+    scale_color_manual(values = c("TRUE" = "red", "FALSE" = "black"), guide = "none") +  # Red color for outliers
+    geom_text(data = dendro_data$labels, aes(x = x, y = y, label = label), hjust = 1, angle = 45, size = 3) +
+    scale_x_continuous(breaks = NULL) + # Remove numeric x-axis values
+    theme_bw() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1),
+          axis.ticks.x = element_blank()) +
+    labs(title = paste("Dendrogram -", method, "method"), 
+         x = "Data Points", 
+         y = "Height (Distance)")
+  
+  ggplotly(dend_plot)
+}

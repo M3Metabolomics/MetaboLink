@@ -899,15 +899,20 @@ observeEvent(input$mergeDatasets, {
         # Save the PCA results to pca_results
         pca_result <- pcaplot(data_subset, seq_subset, input$pca1_islog)
         
-        # Generate a unique name for the PCA result from the
+        # Generate a unique name for the PCA result based on the dataset name
         dataset_name <- names(rv$data)[sd]
-        timestamp <- format(Sys.time(), "%H%M%S")  # Timestamp for uniqueness
-        pca_name <- paste0(dataset_name, "_pca_", timestamp)
-        pc_name <- paste0(dataset_name, "_PC_", timestamp)
+        pca_name <- paste0(dataset_name, "_pca")
+        pc_name <- paste0(dataset_name, "_PC")
         
-        # Save the PCA and PC results as a named list for each PCA result
-        rv$pca_results[[pca_name]] <- list(pca_df = pca_result$pca_df,
-                                           PC_df = pca_result$PC_df)
+        # Check if the PCA name already exists in rv$pca_results
+        if (!(pca_name %in% names(rv$pca_results))) {
+          # If the name does not exist, save the PCA and PC results
+          pca_result <- pcaplot(data_subset, seq_subset, input$pca1_islog)  # Perform PCA
+          
+          # Save the PCA and PC results as a named list for each PCA result
+          rv$pca_results[[pca_name]] <- list(pca_df = pca_result$pca_df,
+                                             PC_df = pca_result$PC_df)
+        }
         
         
         # Debugging to show that rv$results is updated
@@ -968,15 +973,20 @@ observeEvent(input$mergeDatasets, {
       # Save the PCA results to pca_results
       pca_result <- pcaplot(data_subset, seq_subset, input$pca1_islog)
       
-      # Generate a unique name for the PCA result from the
+      # Generate a unique name for the PCA result based on the dataset name
       dataset_name <- names(rv$data)[sd]
-      timestamp <- format(Sys.time(), "%H%M%S")  # Timestamp for uniqueness
-      pca_name <- paste0(dataset_name, "_pca_", timestamp)
-      pc_name <- paste0(dataset_name, "_PC_", timestamp)
+      pca_name <- paste0(dataset_name, "_pca")
+      pc_name <- paste0(dataset_name, "_PC")
       
-      # Save the PCA and PC results as a named list for each PCA result
-      rv$pca_results[[pca_name]] <- list(pca_df = pca_result$pca_df,
-                                         PC_df = pca_result$PC_df)
+      # Check if the PCA name already exists in rv$pca_results
+      if (!(pca_name %in% names(rv$pca_results))) {
+        # If the name does not exist, save the PCA and PC results
+        pca_result <- pcaplot(data_subset, seq_subset, input$pca1_islog)  # Perform PCA
+        
+        # Save the PCA and PC results as a named list for each PCA result
+        rv$pca_results[[pca_name]] <- list(pca_df = pca_result$pca_df,
+                                           PC_df = pca_result$PC_df)
+      }
       
       # Debugging to show that rv$results is updated
       # cat("PCA results saved as:", pca_name, "\n")
@@ -1151,8 +1161,13 @@ observeEvent(input$mergeDatasets, {
   # PCA results update 
   # Whenever pca_results are updated, update the selectInput choices
   observe({
-    updateSelectInput(session, c("kmeans_pca"), choices = names(rv$pca_results))
+    updateSelectInput(session, "kmeans_pca", choices = names(rv$pca_results))
   })
+  
+  observe({
+    updateSelectInput(session, "hierarchical_pca", choices = names(rv$pca_results))
+  })
+  
   
   # Outlier Detection 
   # kmeans
@@ -1190,7 +1205,6 @@ observeEvent(input$mergeDatasets, {
     }
   })
   
-  
   observeEvent(input$run_kmeans, {
     # Fetch the selected PCA data
     pca_data <- rv$pca_results[[input$kmeans_pca]]  # Fetch the selected PCA result (list)
@@ -1213,7 +1227,6 @@ observeEvent(input$mergeDatasets, {
         
         # Save the K-means result (including outlier information) into the reactive value
         rv$outlier_df[[kmeans_name]] <- list(kmeans_df = kmeans_results)
-        print(rv$outlier_df)
         
         # Render the K-means plot in the UI
         output$kmeans_plot <- renderPlotly({
@@ -1233,6 +1246,64 @@ observeEvent(input$mergeDatasets, {
     }
   })
   
+  # Hierarchical Clustering 
+  # Observe event when the user clicks the "Run Hierarchical Clustering" button
+  observeEvent(input$run_hierarchical, {
+    # Fetch the selected PCA data from reactive values
+    pca_data <- rv$pca_results[[input$hierarchical_pca]]  # Fetch the selected PCA result (list)
+    sequence <- rv$sequence[[rv$activeFile]]  # Fetch the sequence data from the active file
+    
+    seq_subset <- sequence[sequence[, "labels"] %in% c("Sample", "QC"), ]  # Get the sequence for the samples and QC
+    
+    # Debugging to show the sequence data
+    if (!"labels" %in% colnames(sequence)) {
+      cat("Error: 'labels' column not found in sequence data.\n")
+      return()
+    }
+    str(seq_subset)
+
+    if (!is.null(pca_data)) {
+      pca_df <- pca_data[[1]]   # Extract pca_df from the list
+      PC_df <- pca_data[[2]]    # Extract PC_df from the list
+      
+      # Retrieve parameters from the UI
+      method <- input$clustering_method   # Clustering method selected
+      k <- input$num_clusters_hierarchical  # Number of clusters
+      threshold <- input$threshold  # Dendrogram threshold
+      
+      # Debugging to show the parameters 
+      cat("Clustering method: ", method, "\n")
+      cat("Number of clusters: ", k, "\n")
+      cat("Dendrogram threshold: ", threshold, "\n")
+      print(head(seq_subset))
+      
+      # Perform the hierarchical clustering
+      hierarchical_results <- perform_hierarchical_clustering(pca_df, seq_subset, method, k, threshold)
+      
+      # Render the hierarchical clustering plot
+      output$hclust_plot <- renderPlotly({
+        hierarchical_results$hclust_plot  # Pass the plotly object to renderPlotly
+      })
+      
+      # Render the confusion matrix plot
+      output$conf_matrix_plot <- renderPlotly({
+        hierarchical_results$conf_matrix_plot  # Pass the plotly object to renderPlotly
+      })
+      
+      # Render the dendrogram plot
+      output$dendrogram_plot <- renderPlotly({
+        hierarchical_results$dendrogram_plot  # Pass the plotly dendrogram to renderPlotly
+      })
+      
+      # Render the outliers table
+      output$hierarchical_outliers <- renderDT({
+        datatable(hierarchical_results$hierarchical_outliers, options = list(pageLength = 20, autoWidth = TRUE))
+      })
+      
+    } else {
+      cat("No PCA results selected or available.\n")
+    }
+  })
   
   
   # Summary of data

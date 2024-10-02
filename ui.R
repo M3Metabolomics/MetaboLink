@@ -496,6 +496,8 @@ shinyUI(dashboardPage(
                                                  tagList(
                                                    list(
                                                      tags$li("Add information regarding Hierarchical analysis here.")))))),
+                                # Make a dropdown to select the PCA results from the reactive values 
+                                selectInput("hierarchical_pca", "Choose PCA Results:", choices = NULL),
                                 selectInput("clustering_method", "Select Clustering Method:",  # Dropdown to select clustering method
                                             choices = c("Single" = "single",
                                                         "Complete" = "complete",
