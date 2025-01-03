@@ -1,21 +1,40 @@
 shinyServer(function(session, input, output) {
   options(shiny.maxRequestSize = 30 * 1024^2)
 
-  # Global variables
-  rv <- reactiveValues(data = list(), sequence = list(), activeFile = NULL, results = list(),
-                  tmpData = NULL, tmpSequence = NULL, choices = NULL, drift_plot_select = 1, info = vector("character"))
+  ### GLOBAL VARIABLES ###
 
+  rv <- reactiveValues(
+    # File management
+    activeFile = NULL,        # Currently selected file
+    choices = NULL,           # List of all the names of the data files in the system
+
+    # Data storage
+    data = list(),              # List of data frames containing intensity data
+    sequence = list(),          # List of sequence files (corresponding to the same index in "data")
+    results = list(),           # List of statistical test results (corresponding to the same index in "data")
+    info = vector("character"), # Information about the changes made to files (corresponding to the same index in "data")
+    
+    # Temporary storage
+    tmpData = NULL,             # Temporary storage for data
+    tmpSequence = NULL,         # Temporary storage for sequence
+    
+    # Plot settings
+    drift_plot_select = 1       # Selected plot for drift analysis
+  )
+
+  # Merging settings
   userConfirmation <- reactiveVal(FALSE)
-  disable("upload")
-
-  rankings_merge <- data.frame(
+  rankings <- data.frame(
     name = c("high", "medium", "low"),
     priority = c(1, 2, 3)
   )
 
-  massCorrection <- read.csv("./csvfiles/adducts.csv")
+  # Avoid errors when pressing Upload button before file is loaded
+  disable("upload")     
 
-  # Window/panel selection
+
+  ### WINDOW SELECTION ###
+
   observeEvent(list(c(input$sequence, input$example, input$upload)), {
       windowselect("sequence")
     }, ignoreInit = T
@@ -33,123 +52,187 @@ shinyServer(function(session, input, output) {
 
   ### Functions ###
 
-  initializeVariables <- function() {
-    rv$results[[length(rv$results) + 1]] <- list()
-  }
-
+  # Creates a download handler for different file types
   createDownloadHandler <- function(type, fileExtension, dataFunc) {
     function(x) {
+      # Assign a download hanfler for the specified file type and index
       output[[paste0("dwn_", type, x)]] <- downloadHandler(
+         # Generate the filename dynamically based on the data name, type, and extension
         filename = function() {
           paste0(names(rv$data[x]), "_", type, fileExtension)
         },
+
+         # Define the content of the file to be downloaded
         content = function(file) {
-          dataToWrite <- dataFunc(rv, x)  # Pass rv and x to the data function
+          dataToWrite <- dataFunc(rv, x)  # Generate the data using the provided data function
           if(fileExtension == ".csv") {
-            write.csv(dataToWrite, file, row.names = FALSE)
+            write.csv(dataToWrite, file, row.names = FALSE) # Write as CSV
           } else if(fileExtension == ".xlsx") {
-            write_xlsx(dataToWrite, file)
+            write_xlsx(dataToWrite, file) # Write as Excel file
           } else if(fileExtension == ".txt") {
-            writeLines(dataToWrite, file)
+            writeLines(dataToWrite, file) # Write as plain text
           }
         }
       )
     }
   }
 
+  # Function to render a UI for download links for each data file
   renderDownloadUI <- function(idPrefix, labelSuffix) {
     renderUI({
+      # Generate a list of download links for each file in rv$choices
       lapply(seq_len(length(rv$choices)), function(x) {
-        fluidRow(column(12, downloadLink(paste0(idPrefix, x), paste0(rv$choices[x], labelSuffix))))
+        fluidRow(
+          column(
+            12, 
+            downloadLink(paste0(idPrefix, x), paste0(rv$choices[x], labelSuffix))
+          )
+        )
       })
     })
   }
 
+  # Function to update data and sequence, either by creating a new file or modifying the active file
   updateDataAndSequence <- function(notificationMessage, newFileInput, suffix, additionalInfo = NULL) {
+
     if (is.null(rv$tmpData)) {
       showNotification(notificationMessage, type = "error")
     } else {
       if (newFileInput) {
+        # Add a new file
         newIndex <- length(rv$data) + 1
+
+        # Update data and sequence lists
         rv$data[[newIndex]] <- rv$tmpData
         rv$sequence[[newIndex]] <- rv$tmpSequence
+
+        # Assign a name to the new file
         newName <- paste0(names(rv$data)[rv$activeFile], suffix)
         names(rv$data)[newIndex] <- newName
+
+        # Add additional information if provided
         if (!is.null(additionalInfo)) {
           rv$info[newIndex] <- paste(ifelse(is.na(rv$info[rv$activeFile]), "", rv$info[rv$activeFile]), additionalInfo, "\n")
         }
-        initializeVariables()
+
+        # Initialize results for the new file
+        rv$results[[length(rv$results) + 1]] <- list()
+
+        # Set new file as active
         rv$activeFile <- newIndex
+
       } else {
+        # Modify current active file
         rv$data[[rv$activeFile]] <- rv$tmpData
         rv$sequence[[rv$activeFile]] <- rv$tmpSequence
+
+        # Update name
         names(rv$data)[rv$activeFile] <- paste0(names(rv$data)[rv$activeFile], suffix)
+
+        # Update additional information (if provided)
         if (!is.null(additionalInfo)) {
-          rv$info[rv$activeFile] <- paste(ifelse(is.na(rv$info[rv$activeFile]), "", rv$info[rv$activeFile]), additionalInfo, "\n")
+          rv$info[rv$activeFile] <- paste(
+            ifelse(is.na(rv$info[rv$activeFile]), "", rv$info[rv$activeFile]), 
+            additionalInfo, 
+            "\n")
         }
       }
+      # Update list of choices for the UI
       rv$choices <- paste(seq_along(rv$data), ": ", names(rv$data))
+
+      # Clear temp storage
       rv$tmpData <- NULL
       rv$tmpSequence <- NULL
     }
   }
   
 
-  observeEvent(input$inputFile, { # Ensure file is uploaded before pressing Upload button
+  observeEvent(input$inputFile, { 
+    # Ensure file is uploaded before pressing Upload button
     inputFile <<- read.csv(input$inputFile$datapath, header = 1, stringsAsFactors = F, check.names = FALSE)
     enable("upload")
   })
 
+
+  # Observe upload button
   observeEvent(input$upload, {
     shinyCatch({
-      #inputFile <- read.csv(input$inputFile$datapath, header = 1, stringsAsFactors = F, check.names = FALSE)
+      # Transpose the input file if fileType specifies "Samples in rows"
       if(input$fileType == "Samples in rows") {
         inputFile <- t(inputFile)
       }
     },
       blocking_level = 'message'
     )
+    # Check for duplicate columns in the input file
     if(any(duplicated(names(inputFile)))) {
-      sendSweetAlert(session, title = "Error", text = paste("Duplicate columns found."), type = "error")
+      sendSweetAlert(
+        session,
+        title = "Error",
+        text = paste("Duplicate columns found."), 
+        type = "error"
+      )
     } else {
+      # Process uploaded file
       labels <- identifyLabels(inputFile)
-      initializeVariables()
-      rv$sequence[[length(rv$sequence) + 1]] <- data.frame(labels, batch = NA,
-                                                        order = NA, group = NA,
-                                                        time = NA, paired = NA,
-                                                        amount = NA)
+      rv$results[[length(rv$results) + 1]] <- list()
+
+      # Create new sequence data frame with labels and placeholders for additional information
+      rv$sequence[[length(rv$sequence) + 1]] <- data.frame(
+        labels, 
+        batch = NA,
+        order = NA, 
+        group = NA,
+        time = NA,
+        paired = NA,
+        amount = NA
+      )
+      # Add uploaded data to rv object
       rv$data[[length(rv$data) + 1]] <- inputFile
+      
+      # Assign name to the uploaded file by trimming the file extension
       names(rv$data)[length(rv$data)] <- substr(input$inputFile$name, 1, nchar(input$inputFile$name) - 4)
+      
       rv$choices <- paste(seq_along(rv$data), ": ", names(rv$data))
-      rv$activeFile <- length(rv$data)
+      rv$activeFile <- length(rv$data) # Set uploaded file as active file
+
+      # Switch to Datainput tab in the app
       updateTabItems(session, "tabs", selected = "Datainput")
+
       show("buttons")
     }
   })
+
 
   observeEvent(input$inputSequence, {
     shinyCatch({
       inputSequence <- read.csv(input$inputSequence$datapath, header = 1, stringsAsFactors = FALSE)
       colnames(inputSequence) <- tolower(colnames(inputSequence))
-      inputSequence <- checkSequence(inputSequence)
+      inputSequence <- validateSequence(inputSequence)
     },
       blocking_level = 'message'
     )
-    sequence <- rv$sequence[[rv$activeFile]]
-    labeledSequence <- data.frame("sample" = row.names(sequence), sequence)
-    inputSequence["sample"] <- lapply(inputSequence["sample"], as.character)
-    sequence <- left_join(labeledSequence[, 1:2], inputSequence, by = "sample")
-    row.names(sequence) <- sequence[, 1]
-    sequence <- sequence[, -1]
+
+    # Merge labels with uploaded sequence
+    sequence <- left_join(
+      data.frame("sample" = row.names(rv$sequence[[rv$activeFile]]), 
+                 rv$sequence[[rv$activeFile]]), 
+      inputSequence, 
+      by = "sample"
+    ) %>%
+      column_to_rownames("sample")  # Set 'sample' as row names and drop the column
+
+    # Save back to rv$sequence
     rv$sequence[[rv$activeFile]] <- sequence
 
+    # Check for invalid group names
     if(any(grepl("[^[:alnum:]]", sequence$group))) {
       showModal(
         modalDialog(
           title = "Invalid group names", size = "m", easyClose = TRUE,
           footer = list(actionButton("group_name_format", "Format names"), modalButton("Dismiss")),
           fluidRow(
-            column(12, p("Invalid group names found. Group names must be alphanumeric and not include spaces."))
+            column(12, p("Invalid group names found. Group names must be alphanumeric and not include spaces. Select 'Format names' to remove invalid characters."))
           )
         )
       )
@@ -157,6 +240,7 @@ shinyServer(function(session, input, output) {
   })
 
   observeEvent(input$group_name_format, {
+    # Remove invalid characters from group names
     sequence <- rv$sequence[[rv$activeFile]]
     sequence$group <- gsub("[^[:alnum:]]", "", sequence$group)
     rv$sequence[[rv$activeFile]] <- sequence
@@ -166,34 +250,45 @@ shinyServer(function(session, input, output) {
   observeEvent(input$reuseSequence, {
     inputSequence <- read.csv(input$inputSequence$datapath, header = 1, stringsAsFactors = FALSE)
     colnames(inputSequence) <- tolower(colnames(inputSequence))
-    inputSequence <- checkSequence(inputSequence)
-    sequence <- rv$sequence[[rv$activeFile]]
-    labeledSequence <- data.frame("sample" = row.names(sequence), sequence)
-    inputSequence["sample"] <- lapply(inputSequence["sample"], as.character)
-    sequence <- left_join(labeledSequence[, 1:2], inputSequence, by = "sample")
-    row.names(sequence) <- sequence[, 1]
-    sequence <- sequence[, -1]
-    rv$sequence[[rv$activeFile]] <- sequence
+    
+    # Merge labels with uploaded sequence
+    sequence <- left_join(
+      data.frame("sample" = row.names(rv$sequence[[rv$activeFile]]), 
+                 rv$sequence[[rv$activeFile]]), 
+      inputSequence, 
+      by = "sample"
+    ) %>%
+      column_to_rownames("sample")  # Set 'sample' as row names and drop the column
   })
 
   observeEvent(input$editColumns, {
+    # Modal for editing columns
     showModal(
       modalDialog(
-        title = "Edit columns", size = "s", easyClose = TRUE,
-        footer = list(actionButton("edit_cols_confirm", "Confirm"), modalButton("Dismiss")),
-        fluidRow(
+        title = "Edit columns", 
+        size = "s", 
+        easyClose = TRUE,
+        footer = list(
+          actionButton("edit_cols_confirm", "Confirm"), 
+          modalButton("Dismiss")
+        ),
+        fluidRow( 
+          # Headers
           column(width = 9, h4("Column name")),
           column(width = 3, style = "text-align: left;", h4("Keep"))
         ),
+        # Dynamically generate input fields for each column in the active file
         lapply(seq(ncol(rv$data[[rv$activeFile]])), function(x) {
           fluidRow(
+            # Text input for editing column name
             column(
               width = 9,
               textInput(paste0("column_edit_name", x), NULL, value = colnames(rv$data[[rv$activeFile]])[x])
             ),
+            # Checkbox to select whether to keep column
             column(
               width = 3, style = "text-align: center;",
-              prettyCheckbox(paste0("columns_to_keep", x), NULL, status = "info", value = T)
+              prettyCheckbox(paste0("columns_to_keep", x), NULL, status = "info", value = TRUE)
             ),
           )
         })
@@ -201,16 +296,25 @@ shinyServer(function(session, input, output) {
     )
   })
 
+  # Observe confirm button in editing columns modal
   observeEvent(input$edit_cols_confirm, {
     ncol <- ncol(rv$data[[rv$activeFile]])
+
+    # Retrieve updated column names
     column_names <- character()
     column_names <- sapply(seq(ncol), function(x) {
       input[[paste0("column_edit_name", x)]]
     })
+
     if(!checkDuplicates(column_names)) {
+      # Update column names in active data frame and sequence
       isolate(colnames(rv$data[[rv$activeFile]]) <- column_names)
       isolate(row.names(rv$sequence[[rv$activeFile]]) <- column_names)
+
+      # Determine which columns to keep
       keep <- sapply(seq(ncol), function(x) input[[paste0("columns_to_keep", x)]])
+
+      # Filter data and sequence to keep only selected columns
       rv$data[[rv$activeFile]] <- rv$data[[rv$activeFile]][, keep]
       rv$sequence[[rv$activeFile]] <- rv$sequence[[rv$activeFile]][keep, ]
     }
@@ -258,8 +362,9 @@ shinyServer(function(session, input, output) {
     removeModal()
   })
 
+
+  ## Load example files
   observeEvent(input$example, {
-    # Load example files
     # Negative ion mode
     data <- read.csv("./example_files/Liverfetus_lipid_neg1.csv", stringsAsFactors = FALSE)
     sequence <- read.csv("./example_files/fetus seq neg.csv", stringsAsFactors = FALSE)
@@ -268,7 +373,7 @@ shinyServer(function(session, input, output) {
     rv$sequence[[length(rv$sequence) + 1]] <- sequence
     rv$data[[length(rv$data) + 1]] <- data
     names(rv$data)[length(rv$data)] <- "Liverfetus_negative"
-    initializeVariables()
+    rv$results[[length(rv$results) + 1]] <- list()
 
     # Positive ion mode
     data <- read.csv("./example_files/Liverfetus_lipid_pos1.csv", stringsAsFactors = FALSE)
@@ -278,7 +383,7 @@ shinyServer(function(session, input, output) {
     rv$sequence[[length(rv$sequence) + 1]] <- sequence
     rv$data[[length(rv$data) + 1]] <- data
     names(rv$data)[length(rv$data)] <- "Liverfetus_positive"
-    initializeVariables()
+    rv$results[[length(rv$results) + 1]] <- list()
     rv$choices <- paste(seq_along(rv$data), ": ", names(rv$data))
 
     updateTabItems(session, "tabs", selected = "Datainput")
@@ -289,24 +394,49 @@ shinyServer(function(session, input, output) {
 
   # Update selected data
   observeEvent(input$selectDataset, ignoreInit = TRUE, {
+    # Update active file index
     rv$activeFile <- which(rv$choices %in% input$selectDataset)
 
-    output$seq_table <- renderDT(rv$sequence[[rv$activeFile]], extensions = 'Responsive', server = F, 
-          editable = T, selection = 'none', options = list(pageLength = nrow(rv$sequence[[rv$activeFile]]), 
-          scrollX = TRUE))
-
+    # Render sequence table
+    output$seq_table <- renderDT(
+      rv$sequence[[rv$activeFile]],
+      extensions = 'Responsive',
+      server = F,
+      editable = T, 
+      selection = 'none', 
+      options = list(
+        pageLength = nrow(rv$sequence[[rv$activeFile]]),
+        scrollX = TRUE
+      )
+    )
+    # Update and render the title for the dataset
     output$diboxtitle <- renderText(names(rv$data[rv$activeFile]))
 
-    output$dttable <- renderDT(rv$data[[rv$activeFile]], rownames = FALSE, options = list(scrollX = TRUE, scrollY = "700px"))
+    # Render main data table for the active file
+    output$dttable <- renderDT(
+      rv$data[[rv$activeFile]],
+      rownames = FALSE, 
+      options = list(scrollX = TRUE, scrollY = "700px")
+    )
 
-    output$dt_drift_panel <- renderDT(rv$data[[rv$activeFile]][rv$sequence[[rv$activeFile]][, 1] %in% "Name"], rownames = FALSE, 
-              options = list(autoWidth = TRUE, scrollY = "700px", pageLength = 20))
+    # Render drift panel
+    output$dt_drift_panel <- renderDT(
+      rv$data[[rv$activeFile]][rv$sequence[[rv$activeFile]][, 1] %in% "Name"], 
+      rownames = FALSE, 
+      options = list(autoWidth = TRUE, scrollY = "700px", pageLength = 20)
+    )
 
-    output$dt_boxplot_panel <- renderDT(rv$data[[rv$activeFile]][rv$sequence[[rv$activeFile]][, 1] %in% "Name"], rownames = FALSE, 
-              options = list(autoWidth = TRUE, scrollY = "700px", pageLength = 20))
+    # Render boxplot panel
+    output$dt_boxplot_panel <- renderDT(
+      rv$data[[rv$activeFile]][rv$sequence[[rv$activeFile]][, 1] %in% "Name"], 
+      rownames = FALSE, 
+      options = list(autoWidth = TRUE, scrollY = "700px", pageLength = 20)
+    )
     
     data <- rv$data[[rv$activeFile]]
     sequence <- rv$sequence[[rv$activeFile]]
+
+    # Render histogram of median values for "Sample"
     output$histogram <- renderPlotly({
       samples <- data[, sequence[ , 'labels'] %in% "Sample"]
       medians <- apply(samples, 2, median, na.rm = TRUE)
@@ -321,6 +451,7 @@ shinyServer(function(session, input, output) {
         theme(axis.text.x = element_blank())
     })
 
+    # Render histogram for QCs if available
     output$histogram_qc <- renderUI({
       QCs <- data[, sequence[ , 'labels'] %in% "QC"]
       if(ncol(QCs) > 0) {
@@ -332,9 +463,9 @@ shinyServer(function(session, input, output) {
         plotlyOutput("qc_distribution")
         output$qc_distribution <- renderPlotly({
           ggplot(median_QC, aes(x = QC, y = Median)) +
-          geom_col(fill = "skyblue", color = "black") +
-          labs(x = "Sample", y = "Median") +
-          theme_minimal()
+            geom_col(fill = "skyblue", color = "black") +
+            labs(x = "Sample", y = "Median") +
+            theme_minimal()
         })
       }
       else {
@@ -342,9 +473,18 @@ shinyServer(function(session, input, output) {
       } 
     })
 
-    if (sum(rv$sequence[[rv$activeFile]][, 1] %in% "Name") == 1) { #TODO check if this check is needed
+    # Check if only one column is labeled "Name" and handle internal standards
+    #TODO check if this check is needed
+    if (sum(rv$sequence[[rv$activeFile]][, 1] %in% "Name") == 1) {
       internalStandards <- findInternalStandards(rv$data[[rv$activeFile]][rv$sequence[[rv$activeFile]][, 1] %in% "Name"])
-      updateCheckboxGroupInput(session, "isChoose", choices = internalStandards, selected = internalStandards)
+
+      updateCheckboxGroupInput(
+        session, 
+        "isChoose", 
+        choices = internalStandards, 
+        selected = internalStandards
+      )
+
       enable("normalizeIS"); enable("removeIS"); enable("saveIS")
       if(length(internalStandards) == 0) {
         disable("normalizeIS"); disable("removeIS"); disable("saveIS")
@@ -357,6 +497,27 @@ shinyServer(function(session, input, output) {
     choices <- rv$choices
     num_datasets <- length(choices)
 
+
+    # Define a generic function to create download handlers
+    createGenericDownloadHandler <- function(output_id,     filename_func, content_func) {
+      output[[output_id]] <- downloadHandler(
+        filename = filename_func,
+        content = content_func
+      )
+    }
+
+    # Download sequence
+    createGenericDownloadHandler(
+      "downloadSequence",
+      filename_func = function() {
+        paste0(names(rv$data[rv$activeFile]), "_seq.csv")
+      },
+      content_func = function(file) {
+        write.csv(cbind("sample" = rownames(rv$sequence[[rv$activeFile]]), rv$sequence[[rv$activeFile]]), 
+                  file, row.names = FALSE)
+      }
+    )
+
     output$downloadSequence <- downloadHandler(
       filename <- function() {
         paste0(names(rv$data[rv$activeFile]), "_seq.csv")
@@ -366,7 +527,7 @@ shinyServer(function(session, input, output) {
       }
     )
     
-    # Export panel
+    # Render Export panel
     output$export_ui <- renderDownloadUI("dwn_general", ".csv")
     output$export_metabo <- renderDownloadUI("dwn_metabo", "_metabo.csv")
     output$export_stats <- renderDownloadUI("dwn_stats", "_results.xlsx")
@@ -377,53 +538,93 @@ shinyServer(function(session, input, output) {
 #    lapply(seq_len(num_datasets), createDownloadHandler("settings", ".txt", rv$info[[rv$activeFile]]))
 #    lapply(seq_len(num_datasets), createDownloadHandler("metabo", ".csv", getMetaboData))
 
-    lapply(1:length(rv$choices), function(x) {
-      output[[paste0("dwn_stats", x)]] <- downloadHandler(
-        filename = function() {
-          paste0(names(rv$data[x]), "_results.xlsx")
-        },
-        content = function(file) {
-          write_xlsx(rv$results[[x]], file)
-        }
+    # lapply(1:length(rv$choices), function(x) {
+    #   output[[paste0("dwn_stats", x)]] <- downloadHandler(
+    #     filename = function() {
+    #       paste0(names(rv$data[x]), "_results.xlsx")
+    #     },
+    #     content = function(file) {
+    #       write_xlsx(rv$results[[x]], file)
+    #     }
+    #   )
+    # })
+    # lapply(1:length(rv$choices), function(x) {
+    #   output[[paste0("dwn_general", x)]] <- downloadHandler(
+    #     filename = function() {
+    #       paste0(names(rv$data[x]), ".csv")
+    #     },
+    #     content = function(file) {
+    #       write.csv(rv$data[[x]], file, row.names = FALSE)
+    #     }
+    #   )
+    # })
+    # lapply(1:length(rv$choices), function(x) {
+    #   output[[paste0("dwn_settings", x)]] <- downloadHandler(
+    #     filename = function() {
+    #       paste0(names(rv$data[x]), ".txt")
+    #     },
+    #     content = function(file) {
+    #       write.csv(rv$info[x], file, row.names = FALSE)
+    #     }
+    #   )
+    # })
+    # lapply(1:length(rv$choices), function(x) {
+    #   dat <- rv$data[[x]]
+    #   seq <- rv$sequence[[x]]
+    #   seq[seq[, 1] %in% "QC", 4] <- "QC"
+    #   group <- c("", seq[seq[, 1] %in% c("Sample", "QC"), 4])
+    #   outdat <- data.frame(dat[seq[, 1] %in% "Name"], dat[seq[, 1] %in% c("Sample", "QC")])
+    #   outdat <- rbind(group, outdat)
+    #   output[[paste0("dwn_metabo", x)]] <- downloadHandler(
+    #     filename = function() {
+    #       paste0(names(rv$data[x]), "_metabo.csv")
+    #     },
+    #     content = function(file) {
+    #       write.csv(outdat, file, row.names = FALSE)
+    #     }
+    #   )
+    # })
+
+    # Generate download handlers for all datasets
+    lapply(seq_len(num_datasets), function(x) {
+      dataset_name <- names(rv$data[x])
+      
+      # General file download
+      createGenericDownloadHandler(
+        paste0("dwn_general", x),
+        filename_func = function() { paste0(dataset_name, ".   csv") },
+        content_func = function(file) { write.csv(rv$data[[x]], file, row.names = FALSE) }
       )
-    })
-    lapply(1:length(rv$choices), function(x) {
-      output[[paste0("dwn_general", x)]] <- downloadHandler(
-        filename = function() {
-          paste0(names(rv$data[x]), ".csv")
-        },
-        content = function(file) {
-          write.csv(rv$data[[x]], file, row.names = FALSE)
-        }
+  
+      # Statistics file download
+      createGenericDownloadHandler(
+        paste0("dwn_stats", x),
+        filename_func = function() { paste0(dataset_name,    "_results.xlsx") },
+        content_func = function(file) { write_xlsx(rv$results  [[x]], file) }
       )
-    })
-    lapply(1:length(rv$choices), function(x) {
-      output[[paste0("dwn_settings", x)]] <- downloadHandler(
-        filename = function() {
-          paste0(names(rv$data[x]), ".txt")
-        },
-        content = function(file) {
-          write.csv(rv$info[x], file, row.names = FALSE)
-        }
+  
+      # Settings file download
+      createGenericDownloadHandler(
+        paste0("dwn_settings", x),
+        filename_func = function() { paste0(dataset_name, ".   txt") },
+        content_func = function(file) { write.csv(rv$info[x],   file, row.names = FALSE) }
       )
-    })
-    lapply(1:length(rv$choices), function(x) {
-      dat <- rv$data[[x]]
+  
+      # MetaboAnalyst file download
       seq <- rv$sequence[[x]]
       seq[seq[, 1] %in% "QC", 4] <- "QC"
       group <- c("", seq[seq[, 1] %in% c("Sample", "QC"), 4])
-      outdat <- data.frame(dat[seq[, 1] %in% "Name"], dat[seq[, 1] %in% c("Sample", "QC")])
+      outdat <- data.frame(rv$data[[x]][seq[, 1] %in% "Name"], 
+                           rv$data[[x]][seq[, 1] %in% c("Sample", "QC")])
       outdat <- rbind(group, outdat)
-      output[[paste0("dwn_metabo", x)]] <- downloadHandler(
-        filename = function() {
-          paste0(names(rv$data[x]), "_metabo.csv")
-        },
-        content = function(file) {
-          write.csv(outdat, file, row.names = FALSE)
-        }
+      createGenericDownloadHandler(
+        paste0("dwn_metabo", x),
+        filename_func = function() { paste0(dataset_name,  "_metabo.csv") },
+        content_func = function(file) { write.csv(outdat, file, row.names = FALSE) }
       )
     })
 
+    # Update inputs and selections
     updateCheckboxGroupInput(session, "export_xml_list", choices = choices, selected = NULL)
     updateCheckboxGroupInput(session, "filesToRemove", choices = names(rv$data), selected = NULL)
     updateSelectInput(session, "drift_select", choices = c("None", choices))
@@ -725,11 +926,11 @@ shinyServer(function(session, input, output) {
           fluidRow(
             column(
               width = 8,
-              textInput(paste0("md_rankings_text", x), NULL, value = rankings_merge[x, 1], placeholder = "Empty")
+              textInput(paste0("md_rankings_text", x), NULL, value = rankings[x, 1], placeholder = "Empty")
             ),
             column(
               width = 4,
-              numericInput(paste0("md_rankings_prio", x), NULL, value = rankings_merge[x, 2], min = 0, max = 10)
+              numericInput(paste0("md_rankings_prio", x), NULL, value = rankings[x, 2], min = 0, max = 10)
             ),
           )
         })
@@ -739,8 +940,8 @@ shinyServer(function(session, input, output) {
 
   observeEvent(input$md_edit_rankings, {
     sapply(1:10, function(x) {
-      rankings_merge[x, 1] <<- toupper(input[[paste0("md_rankings_text", x)]])
-      rankings_merge[x, 2] <<- input[[paste0("md_rankings_prio", x)]]
+      rankings[x, 1] <<- toupper(input[[paste0("md_rankings_text", x)]])
+      rankings[x, 2] <<- input[[paste0("md_rankings_prio", x)]]
     })
     removeModal()
   })
@@ -817,7 +1018,7 @@ observeEvent(input$mergeDatasets, {
             datatable(out_dub,
               rownames = F,
               options = list(dom = "t", autowidth = T, paging = F),
-              selection = list(selected = finddup(out_dub, rankings_merge))
+              selection = list(selected = finddup(out_dub, rankings))
             ) %>% formatStyle(1:8, `border-top` = styleRow(cluster_ends, "solid 2px"))
           },
           server = T
@@ -848,7 +1049,7 @@ observeEvent(input$mergeDatasets, {
       rv$data[[length(rv$data) + 1]] <- merged[, seq(ncol(merged) - 2)]
       rv$sequence[[length(rv$sequence) + 1]] <- rv$sequence[[rv$activeFile]]
       names(rv$data)[length(rv$data)] <- paste0(names(rv$data)[rv$activeFile], "_merged")
-      initializeVariables()
+      rv$results[[length(rv$results) + 1]] <- list()
     } else if (isFALSE(input$newFileMerge)) {
       rv$data[[rv$activeFile]] <- merged[, seq(ncol(merged) - 2)]
       names(rv$data)[rv$activeFile] <- paste0(names(rv$data)[rv$activeFile], "_merged")

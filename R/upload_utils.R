@@ -62,7 +62,7 @@ identifyLabels <- function(data) {
 #' @param sequence A data frame representing the sequence data.
 #'
 #' @return A data frame representing the checked and modified sequence data.
-checkSequence <- function(sequence) {
+validateSequence <- function(sequence) {
   columnsToCheck <- c("sample", "batch", "order", "group", "time", "paired", "amount")
   colnames(sequence)[colnames(sequence) == "class"] <- "group"
   missingColumns <- setdiff(columnsToCheck, colnames(sequence))
