@@ -21,6 +21,10 @@ library(jsonlite)
 library(shinyalert)
 library(shinybusy)
 library(gtools)
+library(caret)
+library(rgoslin)
+library(ggbeeswarm)
+library(broom)
 
 library(webchem)
 library(PubChemR)
@@ -35,8 +39,11 @@ library(grid)        # for manual text annotation
 library(stats)       # for t.test, aov
 # volcano 
 library(colourpicker)
+library(scales)
+
 # pathway 
 library(clusterProfiler)
+# library(org.Mm.eg.db)
 
 library(ggraph)
 library(tidygraph)
