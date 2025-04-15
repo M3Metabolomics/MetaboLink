@@ -2,12 +2,9 @@
 
 #' Identify Labels Function
 #'
-#' This function identifies the labels for each column in the data based on the column names and types. 
+#' Identifies the labels for each column in the data based on the column names and types. 
 #' It also checks for duplicates and sends an alert if multiple columns are labeled as "Name", "RT", "Mass", "Adduct_pos", or "Adduct_neg".
 #'
-#' @param data A data frame representing the data.
-#'
-#' @return A factor vector representing the labels for each column in the data.
 identifyLabels <- function(data) {
     labels <- sapply(names(data), function(x) {
         if (grepl("BLANK", toupper(x), fixed = TRUE) && is.numeric(data[, x])) {
@@ -57,11 +54,8 @@ identifyLabels <- function(data) {
 
 #' Check Sequence Function
 #'
-#' This function checks the sequence data for missing columns. If any columns are missing, it adds them with NA values. It also renames the "class" column to "group" and reorders the columns.
+#' Checks the sequence data for missing columns. If any columns are missing, it adds them with NA values. It also renames the "class" column to "group" and reorders the columns.
 #'
-#' @param sequence A data frame representing the sequence data.
-#'
-#' @return A data frame representing the checked and modified sequence data.
 validateSequence <- function(sequence) {
   columnsToCheck <- c("sample", "batch", "order", "group", "time", "paired", "amount")
   colnames(sequence)[colnames(sequence) == "class"] <- "group"
@@ -78,11 +72,8 @@ validateSequence <- function(sequence) {
 
 #' Check Duplicates Function
 #'
-#' This function checks for duplicates in the provided columns. If any duplicates are found, it sends a warning alert.
+#' Checks for duplicates in the provided columns. If any duplicates are found, it sends a warning alert.
 #'
-#' @param columns A character vector representing the columns to check for duplicates.
-#'
-#' @return A logical value indicating whether any duplicates were found.
 checkDuplicates <- function(columns) {
   has_duplicates <- any(duplicated(columns))
   if(has_duplicates) {
@@ -94,11 +85,8 @@ checkDuplicates <- function(columns) {
 
 #' Is Valid Name Function
 #'
-#' This function checks whether a provided string is a valid name. A valid name contains only alphanumeric characters and is no more than 10 characters long.
+#' Checks whether a provided string is a valid name. A valid name contains only alphanumeric characters and is no more than 10 characters long.
 #'
-#' @param s A character string representing the name to check.
-#'
-#' @return A logical value indicating whether the name is valid.
 isValidName <- function(s) {
   if (grepl("^[A-Za-z0-9]+$", s) && nchar(s) <= 10) {
     return(TRUE)

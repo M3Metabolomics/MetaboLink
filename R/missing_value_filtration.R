@@ -5,12 +5,6 @@
 #' This function calculates the 'keep' variable which is used to determine which
 #' rows of the data should be kept based on the sample type and cutoff.
 #'
-#' @param data A data frame containing the data to be filtered.
-#' @param sequence A data frame containing the sequence of the data.
-#' @param sample_type A character string representing the sample type to be used in the calculation.
-#' @param cutoff A numeric value representing the cutoff to be used in the calculation.
-#'
-#' @return A logical vector indicating which rows of the data should be kept.
 calculate_keep <- function(data, seq, sample_type, cutoff) {
 
   data_sample <- data[seq[, 1] %in% sample_type]
@@ -26,11 +20,6 @@ calculate_keep <- function(data, seq, sample_type, cutoff) {
 #' 'keep' matrix based on the presence of non-NA values in each class of data.
 #' Rows of data where any column in the 'keep' matrix is TRUE are kept.
 #'
-#' @param data A data frame containing the data to be filtered.
-#' @param sequence A data frame containing the sequence of the data.
-#' @param cutoff A numeric value representing the cutoff to be used in the filtration.
-#'
-#' @return A logical vector indicating which rows of the data should be kept.
 in_group_filtration <- function(data, sequence, cutoff) {
   data_sample <- data[sequence[, 1] %in% "Sample"]
   data_sample[data_sample == 0] <- NA
@@ -58,12 +47,6 @@ in_group_filtration <- function(data, sequence, cutoff) {
 #' This function removes rows from the data based on a cutoff and a specified method. 
 #' The methods can be 'entire data', 'in QC', or 'in group'.
 #'
-#' @param data A data frame containing the data to be filtered.
-#' @param seq A data frame containing the sequence of the data.
-#' @param cutoff A numeric value representing the cutoff to be used in the filtration.
-#' @param method A character string representing the method to be used in the filtration.
-#'
-#' @return A data frame containing the filtered data.
 cutoffrm <- function(data, sequence, cutoff, method) {
   cutoff <- cutoff / 100
   valid_methods <- c("entire data", "in QC", "in group")
