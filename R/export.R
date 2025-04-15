@@ -1,21 +1,37 @@
+
+#' Select and Prepare Data for PolySTest Analysis
+#'
+#' This function filters and prepares data for further analysis with PolySTest. 
+#' It selects specific rows and columns from the input data based on the provided 
+#' sequence, groups, and time parameters.
+#'
 selectPolySTest <- function(data, sequence, groups, time) {
+  # filter name and sample columns
   tseq <- sequence[sequence[, 1] %in% c("Name", "Sample"), ]
   baseCondition <- tseq[, 1] %in% "Name"
+
   if(!any(time == "")) {
-    timeGroupCondition <- (tseq[, 5] %in% time[1] & tseq[, 4] %in% groups[1]) |
-                          (tseq[, 5] %in% time[2] & tseq[, 4] %in% groups[2])                      
-    condition <- baseCondition | timeGroupCondition
-  } else {
+    # filter by groups if no time points
     condition <- baseCondition | (tseq[, 4] %in% groups)
+  } else {
+    timeGroupCondition <- (tseq[, 5] %in% time[1] & tseq[, 4] %in% groups[1]) |
+                          (tseq[, 5] %in% time[2] & tseq[, 4] %in% groups[2])
+
+    condition <- baseCondition | timeGroupCondition
   }
+
   selected <- data[, condition, drop = FALSE]
   selected_sequence <- tseq[condition, ]
 
-  selected <- selected[!duplicated(selected[, 1]), ] #TODO right now we remove duplicates before sending but this might be wrong 
+  # remove duplicates (TODO - review depending on downstream analysis)
+  selected <- selected[!duplicated(selected[, 1]), ] 
   
   return(list(selected = selected, selected_sequence = selected_sequence))
 }
 
+
+#' Add Empty Columns to Data (required for PolySTest) to ensure same replicate no. per group
+#' 
 addEmptyCols <- function(data, sequence, groups, replicates) {
   processed <- data[, 1] # feature names
   rgroup <- c("") # group vector
@@ -25,14 +41,22 @@ addEmptyCols <- function(data, sequence, groups, replicates) {
     groupCols <- data[, sequence[, 4] %in% groups[group]]
     time <- sequence[sequence[, 4] %in% groups[group], 5]
     processed <- cbind(processed, groupCols)
+
+    # add missing values cols
     if(length(groupCols) < replicates) {
       missing <- t(rep(NA, replicates - length(groupCols)))
       processed <- cbind(processed, missing)
     }
+    
     rgroup <- append(rgroup, rep(groups[group], replicates))
-    if(any(complete.cases(sequence[, 5])))
+
+    # add time values if available
+    if(any(complete.cases(sequence[, 5]))) {
       rtime <- append(rtime, t(time))
     }
+  }
+
+  # rename columns for polystest
   if(any(complete.cases(sequence[, 5])))
     colnames(processed) <- paste(colnames(processed), paste(rgroup, rtime, sep = "_"), sep = "_")
   else
@@ -40,10 +64,12 @@ addEmptyCols <- function(data, sequence, groups, replicates) {
   return(processed)
 }
 
+
 addEmptyColsTime <- function(data, sequence, group_time, replicates) {
   processed <- data[, 1] # feature names
   rgroup <- c("") # group vector
   data <- data[, -1]
+  
   print(head(data))
   uniqueGroupTime <- unique(na.omit(group_time))
   print(group_time == uniqueGroupTime[1])
