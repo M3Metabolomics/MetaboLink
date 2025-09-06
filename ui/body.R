@@ -1,7 +1,8 @@
-source('panels/*.R')
-source('panels/datatablePanel.R')
-source('panels/statisticsPanel.R')
-source('panels/exportPanel.R')
+# Load all panels
+rFiles <- list.files("ui/panels", pattern = "\\.R$", full.names = TRUE)
+for (file in rFiles) {
+  source(file)
+}
 
 body <- dashboardBody(
   tags$head(tags$style(".modal-sm{ width:300px}

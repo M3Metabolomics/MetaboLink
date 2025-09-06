@@ -789,34 +789,15 @@ datatablePanel <- fluidRow(
                        
                        # Row 3: Heatmap Plot & Results
                        fluidRow(
-                           box(
-                             width = NULL,
-                             title = "Heatmap Plot",
-                             status = "primary",
-                             solidHeader = TRUE,
-                             collapsible = TRUE,
-                             
-                             plotOutput("heatmap_plot", height = "600px") %>% withSpinner(color = "steelblue"),
-                             
-                           ),
                          box(
                             title = "Interactive Heatmap", width = 12, status = "primary", solidHeader = TRUE,
                             originalHeatmapOutput("heatmap_interactive")
                          ),
+                         #TODO add small heatmap
                          box(
-                           title = "Ouput", width = 12, status = "primary", solidHeader = TRUE,
+                           title = "Output", width = 12, status = "primary", solidHeader = TRUE,
                            HeatmapInfoOutput("heatmap_interactive", title = NULL)
-                         ), 
-                         #TODO figure out min width and why it crashes without this
-                         tags$style("
-                               .content-wrapper, .right-side {
-                                   overflow-x: auto;
-                                   overflow-y: visible;
-                               }
-                               .content {
-                                   min-width:1500px;
-                               }
-                           ")
+                         )
                       ),
                        fluidRow(
                          column(
