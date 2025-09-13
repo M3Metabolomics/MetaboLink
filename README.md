@@ -5,7 +5,7 @@
 
 # MetaboLink
 
-MetaboLink is a web-based application created with shiny R and it is available at http://computproteomics.bmb.sdu.dk/MetaboLink/.
+MetaboLink is a web-based application for metabolomics and lipidomics data processing and it is available at http://computproteomics.bmb.sdu.dk/MetaboLink/.
 Documentation on how to use the app can be found in [Wiki MetaboLink](https://github.com/anitamnd/MetaboLink/wiki).
 
 Example files to be used with the app are included in the folder _example_files_.
