@@ -327,10 +327,6 @@ volcano_plot <- function(data, volcano_df_name = "volcano",
                          x_param = 5 , y_param = 5, apply_axis_limits = FALSE,
                          pval_col = "p.adj") {
   
-  library(ggplot2)
-  library(plotly)
-  library(ggrepel)
-  library(dplyr)
   
   clean_dataset_name <- gsub("_", " ", volcano_df_name) 
   message(paste("Processing:", clean_dataset_name))

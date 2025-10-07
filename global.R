@@ -1,67 +1,69 @@
+# Base
+library(grid)
+library(stats)
+
+# Shiny 
 library(shiny)
-library(shinydashboard)
+library(shinyalert)
 library(shinyBS)
+library(shinybusy) # for spinners, progress bar...
+library(shinycssloaders)
+library(shinydashboard)
 library(shinyjs)
 library(shinyWidgets)
-library(spsComps)
-library(DT)
-library(dplyr)
-library(plotly)
-library(ggplot2)
-library(ggrepel)
-library(gridExtra)
-library(impute)
-library(randomForest)
-library(writexl)
-library(igraph)
-library(stringi)
-library(BiocManager)
-library(shinycssloaders)
-library(jsonlite)
-library(shinyalert)
-library(shinybusy)
-library(gtools)
-library(caret)
-library(rgoslin)
-library(ggbeeswarm)
-library(broom)
+library(spsComps) # custom  UI and server components
+library(colourpicker)
 
-library(webchem)
-library(PubChemR)
-library(data.table)
-library(KEGGREST)
+# Data science
+library(tidyverse)
+library(data.table) # extension of data.frame
+library(DT)
+library(impute)
+library(plotly)
+
 library(car)
-# for heatmap 
-library(stringr)
+library(caret)
+library(clusterProfiler)
+library(randomForest)
+
+library(circlize)
+library(ggbeeswarm) # categorical scatter (violin point) plots
+library(ggnetwork) # ggplot2 extension for network visualization
+library(ggrepel) #base improved text labels in plots for ggplot2
+library(ggraph)
+library(igraph)
+library(tidygraph)
+
 library(ComplexHeatmap)
 library(InteractiveComplexHeatmap)
-library(circlize)    # for colorRamp2
-library(grid)        # for manual text annotation
-library(stats)       # for t.test, aov
-# volcano 
-library(colourpicker)
-library(scales)
+library("lipidomeR")
 
-# pathway 
-library(clusterProfiler)
-# library(org.Mm.eg.db)
-
-library(ggraph)
-library(tidygraph)
-library(tidyr)
-library(networkD3)
-library(network)
-library(sna)
-library(visNetwork)
-library(threejs)
 library(ndtv)
-library(ggnetwork)
+library(network)
+library(networkD3)
+library(sna)
+library(threejs)
+library(visNetwork)
 
-# lipid heatmap
-library("lipidomeR") # new, used in Lipid Heatmap
+# Utils
+library(BiocManager)
+library(broom)
+library(gridExtra)
+library(jsonlite)
+library(rgoslin) # lipid name parser
+library(scales)
+library(stringi)
+library(writexl)
+
+# APIs
+library(KEGGREST)
+library(PubChemR)
+library(webchem)
 
 
-#options(repos = BiocManager::repositories())
+# library(gtools) # R programming tools
+
+
 source("functions.R")
 
 # Source files in R folder

@@ -223,7 +223,7 @@ shinyServer(function(session, input, output) {
       rv$choices <- paste(seq_along(rv$data), ": ", names(rv$data))
       rv$activeFile <- length(rv$data)
       updateTabItems(session, "tabs", selected = "Datainput")
-      show("buttons")
+      shinyjs::show("buttons")
     }
   })
   
@@ -1062,7 +1062,7 @@ shinyServer(function(session, input, output) {
     rv$choices <- paste(seq_along(rv$data), ": ", names(rv$data))
     
     updateTabItems(session, "tabs", selected = "Datainput")
-    show("buttons")
+    shinyjs::show("buttons")
     updateCollapse(session, "menu", close = "Data input")
     disable("example")
   })
@@ -1685,11 +1685,11 @@ shinyServer(function(session, input, output) {
       hide("imp_minx_hide")
       hide("imp_remaining_hide")
     } else {
-      show("imp_remaining_hide")
+      shinyjs::show("imp_remaining_hide")
     }
     
     if (input$imputationMethod == "Min/X" || input$remainingNAs == "Min/X") {
-      show("imp_minx_hide")
+      shinyjs::show("imp_minx_hide")
     } else {
       hide("imp_minx_hide")
     }

@@ -2,22 +2,8 @@
 #                   OUTLIER DETECTION                     # 
 #---------------------------------------------------------#
 # Load required libraries
-# library(ggplot2)
-# library(dbscan)
-# library(fpc)
-# library(plotly)
-# library(factoextra)
+
 library(caret)
-# library(ggdendro)
-# library(reshape2)
-# library(car)
-# library(heatmaply)
-# library(party)
-# library(rpart)
-# library(rpart.plot)
-# library(ROCR)
-# library(randomForest)
-# library(Rlof)
 
 #### Outlier Detection ----
 #### K-means clustering ----
