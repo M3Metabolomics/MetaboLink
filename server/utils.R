@@ -13,11 +13,6 @@
     # Make a debugging statement for the selectDataset
     print(paste0("Select Dataset is ", input$selectDataset))
     
-    # TODO: Maybe use in future  
-    # Make a debugging statement for the datatype
-    # datatype <- input$dataType
-    # print(paste0(datatype))
-    
     output$seq_table <- renderDT(rv$sequence[[rv$activeFile]],
                                  extensions = 'Responsive',
                                  server = F,

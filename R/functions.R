@@ -22,5 +22,6 @@ windowselect <- function(input) {
   if (input == "datatable") show("datatable_panel") else hide("datatable_panel")
   if (input == "statistics") show("statistics_panel") else hide("statistics_panel")
   if (input == "export") show("export_panel") else hide("export_panel")
+  if (input == "tracer") show("tracer_panel") else hide("tracer_panel")
   if (input == "info") show("info_panel") else hide("info_panel")
 }

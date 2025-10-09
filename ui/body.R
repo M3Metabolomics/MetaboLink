@@ -23,16 +23,22 @@ body <- dashboardBody(
                        style = "default",
                        block = T
     )),
-    column(3, bsButton("statistics_button",
+    column(2, bsButton("statistics_button",
                        label = "Statistics",
                        icon = icon("clipboard"),
                        style = "default",
                        block = T
     )),
     tags$style(type = "text/css", "#plot2 {width:100%}"),
-    column(3, bsButton("export",
+    column(2, bsButton("export",
                        label = "Export",
                        icon = icon("download"),
+                       style = "default",
+                       block = TRUE
+    )),
+    column(2, bsButton("tracer_button",
+                       label = "Tracer analysis",
+                       icon = icon("vial"),
                        style = "default",
                        block = TRUE
     )),
@@ -42,6 +48,7 @@ body <- dashboardBody(
   datatablePanel,
   statisticsPanel,
   exportPanel,
+  tracerPanel,
   fluidRow(
     div(
       id = "welcome_panel",

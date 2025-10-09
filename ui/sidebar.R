@@ -35,14 +35,10 @@ sidebar <- dashboardSidebar(
                                          width = "100%"
                                )
                       ),
-                      # TODO: might be releveant for future
-                      # fluidRow(style = "padding: 0px;",
-                      #          checkboxGroupInput("dataType", "",
-                      #                             choices = c("Metabolomics" = "metabolomics",
-                      #                                         "Lipidomics" = "lipidomics"),
-                      #                             selected = NULL, 
-                      #                             inline = TRUE)
-                      # ),
+                      fluidRow(
+                        style = "padding: 0px;",
+                        checkboxInput("tracer_data", "Tracer data", value = FALSE, width = "100%")
+                      ),
                       fluidRow(
                         style = "margin-right: 0px;",
                         column(6, style = "padding-left:0px;",

@@ -54,6 +54,9 @@ shinyServer(function(input, output, session) {
   observeEvent(input$statistics_button, {
     windowselect("statistics")
   })
+  observeEvent(input$tracer_button, {
+    windowselect("tracer")
+  })
 
 
   initializeVariables <- function() {
