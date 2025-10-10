@@ -19,34 +19,18 @@ tracerPanel <- fluidRow(
                                   "Select Intensity Threshold:",
                                   choices = c(100, 500, 1000, 2000, 5000, 10000),
                                   selected = 500)
-                        )),
+                            ),
+                            column(12, 
+                                actionButton("update_threshold", "Update threshold")
+                            )
+                        ),
                         fluidRow(
-                            column(12, box(width = NULL, DTOutput ("tracer_table") %>% withSpinner  (color="steelblue"))),
+                            column(12, DTOutput("tracer_table") %>% withSpinner (color="steelblue")),
                         ) 
                     )
                 ),
-                tabPanel("Pl2",
+                tabPanel("Fractional Contribution",
                     box(width = NULL, fluidRow(
-                    column(12, 
-                        selectInput("metabolite",
-                                    "Select Metabolite:",
-                                    choices = NULL,
-                                    selected = ""),
-                        selectInput("sample",
-                                    "Select Sample:",
-                                    choices = NULL,
-                                    selected = "")
-                    )),
-                    fluidRow(
-                        column(12, box(width = NULL, plotOutput("tracer_plot_ref") %>% withSpinner(color="steelblue"))),
-                        column(12, box(width = NULL, plotOutput("tracer_plot_rowsum") %>% withSpinner(color="steelblue")))
-                    ),
-                    fluidRow(
-                        column(12, box(width = NULL, DTOutput("tracer_table") %>% withSpinner(color="steelblue")))
-                    )
-                )),
-                tabPanel("FC",
-                    box(width = NULL, fluidRow( #TODO server side fill
                     column(12, 
                         selectInput("metabolite_group",
                                     "Select Metabolite:",
@@ -69,7 +53,27 @@ tracerPanel <- fluidRow(
                         column(12, box(width = NULL, DTOutput("fc_table") %>% withSpinner(color="steelblue")))
                     )
                 )),
-                tabPanel("Isotopologues",
+                tabPanel("Isotopologue Profiles",
+                    box(width = NULL, fluidRow(
+                    column(12, 
+                        selectInput("metabolite",
+                                    "Select Metabolite:",
+                                    choices = NULL,
+                                    selected = ""),
+                        selectInput("sample",
+                                    "Select Sample:",
+                                    choices = NULL,
+                                    selected = "")
+                    )),
+                    fluidRow(
+                        column(12, box(width = NULL, plotOutput("tracer_plot_ref") %>% withSpinner(color="steelblue"))),
+                        column(12, box(width = NULL, plotOutput("tracer_plot_rowsum") %>% withSpinner(color="steelblue")))
+                    #TODO:),
+                    #fluidRow(
+                    #    column(12, box(width = NULL, DTOutput("tracer_table") %>% withSpinner(color="steelblue")))
+                    )
+                )),
+                tabPanel("Isotopologue Timecourse",
                     box(width = NULL, fluidRow(
                         column(12, selectInput("metabolite_iso",
                                     "Select Metabolite:",
@@ -113,7 +117,7 @@ tracerPanel <- fluidRow(
                         column(12, box(width = NULL, DTOutput("iso_table") %>% withSpinner(color="steelblue")))
                     )
                 )),
-                tabPanel("Groups",
+                tabPanel("Group x Time",
                     box(width = NULL,
                       fluidRow(column(12,
                         selectInput("metabolite_time_table",
