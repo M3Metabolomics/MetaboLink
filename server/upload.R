@@ -9,9 +9,10 @@
   
   observeEvent(input$upload, {
     shinyCatch({
-      #inputFile <- read.csv(input$inputFile$datapath, header = 1, stringsAsFactors = F, check.names = FALSE)
       if(input$fileType == "Samples in rows") {
+        #TODO
         inputFile <- t(inputFile)
+        inputFile <- data.frame(inputFile, stringsAsFactors = FALSE)
       }
       
       # Look for column "Name" or "name" and make it the first column
@@ -24,15 +25,7 @@
       # Remove the special charactor special ± character (Unicode U+00B1) from data[,1]
       inputFile[,1] <- iconv(inputFile[,1], "WINDOWS-1252", "UTF-8", sub = "")
       inputFile[,1] <- gsub("\\(±\\)", "", inputFile[,1])
-      
-      # TODO: maybe used for data type in future
-      # inputFile$Data_Type <- ifelse(length(input$dataType) > 0,
-      #                               paste(input$dataType,
-      #                                     collapse = ", "),
-      #                               "Not Specified")
-      # inputFile <- inputFile %>% 
-      #   relocate(Data_Type, .after = Name)
-      
+    
     },
     blocking_level = 'message'
     )

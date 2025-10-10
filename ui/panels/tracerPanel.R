@@ -1,6 +1,13 @@
 tracerPanel <- fluidRow(
     hidden(
         div(id = "tracer_panel",
+
+            fluidRow(box(width = NULL,
+                column(12, h2("Summary")),
+                column(12,
+                       p("Please ensure that you have uploaded a valid tracer sequence file in the 'Sequence' tab before proceeding with the analysis."))
+                    #TODO: groups, time points, no. samples, replicates
+            )),
             tabsetPanel(
                 tabPanel("Sequence",
                     box(width = NULL, fluidRow(
@@ -68,9 +75,6 @@ tracerPanel <- fluidRow(
                     fluidRow(
                         column(12, box(width = NULL, plotOutput("tracer_plot_ref") %>% withSpinner(color="steelblue"))),
                         column(12, box(width = NULL, plotOutput("tracer_plot_rowsum") %>% withSpinner(color="steelblue")))
-                    #TODO:),
-                    #fluidRow(
-                    #    column(12, box(width = NULL, DTOutput("tracer_table") %>% withSpinner(color="steelblue")))
                     )
                 )),
                 tabPanel("Isotopologue Timecourse",
@@ -143,14 +147,7 @@ tracerPanel <- fluidRow(
                 )),
                 tabPanel("Summary",
                     box(width = NULL,
-                    #    fluidRow(
-                    #      column(12,htmlOutput("title")),
-                    #    ),
-                    #    fluidRow(
-                    #      column(6, uiOutput("info_ui")),
-                    #      column(6, htmlOutput("cvinfo_ui"))
-                    #    )
-                    #)
+
                 ))
             )
         )   

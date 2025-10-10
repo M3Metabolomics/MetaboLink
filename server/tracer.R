@@ -133,13 +133,13 @@ observeEvent(input$inputTracerSequence, {
 
 })
 
-  # serve example tracer sequence CSV from example_files
-  output$download_tracer_example <- downloadHandler(
-    filename = function() { "tracer_sequence_example.csv" },
-    content = function(file) {
-      file.copy(file.path("example_files", "tracer_sequence_example.csv"), file)
-    }
-  )
+# serve example tracer sequence CSV from example_files
+output$download_tracer_example <- downloadHandler(
+  filename = function() { "tracer_sequence_example.csv" },
+  content = function(file) {
+    file.copy(file.path("example_files", "tracer_sequence_example.csv"), file)
+  }
+)
 
 
 ### OVERVIEW PANEL ###
@@ -163,7 +163,7 @@ observeEvent(input$update_threshold, {
 })
 
 
-### Panel 2 ###
+### Isotopologue Profiles ###
 
 output$tracer_plot_ref <- renderPlotly({
   req(mfa$tracer_data, input$metabolite, input$sample)
@@ -200,7 +200,7 @@ output$tracer_plot_rowsum <- renderPlot({
 #})
 
 
-### Panel 3 ###
+### Fractional Contribution ###
 
 output$fc_plot <- renderPlot({
   req(mfa$tracer_data)
@@ -243,7 +243,7 @@ output$fc_table <- renderDT({
 })
 
 
-### Panel Isotopologues ###
+### Isotopologue Timecourse ###
 
 observeEvent(input$update_iso_plot, {
   req(mfa$tracer_data)
@@ -348,4 +348,6 @@ output$isotopologue_plot <- renderPlot({
 
 })
 
+
+### Group x Time ###
 
