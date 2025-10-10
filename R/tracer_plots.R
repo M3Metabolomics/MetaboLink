@@ -65,6 +65,7 @@ plotFractionalContribution <- function(data, sequence, plot_settings) {
 # Plot metabolite & sample "Isotopologue distribution — [metabolite] (Normalized to total%)"
 plotIsotopologueDist <- function(data, plot_settings) {
     metabolite_data <- data[data$Analyte == plot_settings$metabolite & data$Analysis == plot_settings$sample, ]
+    
     melted_data <- reshape2::melt(metabolite_data, id.vars = c("Analyte", "Analysis"), variable.name = "isotopologue", value.name = "abundance")
 
     plot <- ggplot(melted_data, aes(x = isotopologue, y = abundance, fill = isotopologue)) +
@@ -114,16 +115,27 @@ plotIsotopologueProfile <- function(data, sequence, plot_settings) {
 
 # Plot isotopologues stacked (per group_time): "Stacked isotopologue abundances — [metabolite] ([Raw/Normalized])" and errorbar variant "Stacked isotopologue abundances (Mean ± SE) — [metabolite] ([Raw/Normalized])"
 plotStackedIsotopologues <- function(data, plot_settings) {
-    # Filter data for selected metabolite
-    filtered_data <- data[data$Analyte == plot_settings$metabolite_group, ]
     
     # Melt data to long format
-    melted_data <- reshape2::melt(filtered_data, id.vars = c("Analyte", "Analysis", plot_settings$group_time), variable.name = "isotopologue", value.name = "abundance")
+    melted_data <- reshape2::melt(data, id.vars = c("Analyte", "Analysis"), variable.name = "isotopologue", value.name = "abundance")
+
+    # ensure isotopologue is ordered so A+0 is at the bottom of stacked bars
+    iso_levels <- unique(melted_data$isotopologue)
+    # try to extract numeric part after '+' to sort numerically; fallback to lexical order
+    nums <- suppressWarnings(as.numeric(gsub(".*\\+(\\d+).*", "\\1", iso_levels)))
+    if (all(!is.na(nums))) {
+        iso_levels <- iso_levels[order(nums, decreasing = TRUE)]
+    } else {
+        iso_levels <- sort(iso_levels, decreasing = TRUE)
+    }
+    melted_data$isotopologue <- factor(melted_data$isotopologue, levels = iso_levels)
+
+    print(melted_data)
     
     # Plot
-    plot <- ggplot(melted_data, aes_string(x = plot_settings$group_time, y = "abundance", fill = "isotopologue")) +
-        geom_bar(stat = "identity") +
-        labs(x = plot_settings$group_time, y = "Abundance", title = paste("Stacked isotopologue abundances —", plot_settings$metabolite_group, "(", ifelse(plot_settings$data_type == "raw", "Raw", "Normalized"), ")")) +
+    plot <- ggplot(melted_data, aes(x = Analysis, y = abundance, fill = isotopologue)) +
+        geom_col(position = "stack") +
+        labs(x = plot_settings$group_time, y = "Abundance", title = paste("Stacked isotopologue abundances —", plot_settings$metabolite_iso)) +
         theme_minimal()
 
     return(plot)
@@ -138,7 +150,6 @@ plotIsotopologueDistAcrossGroups <- function(data, plot_settings) {
     # Melt data to long format
     melted_data <- reshape2::melt(filtered_data, id.vars = c("Analyte", "Analysis", "group"), variable.name = "isotopologue", value.name = "abundance")
     
-    # Plot
     plot <- ggplot(melted_data, aes(x = group, y = abundance, fill = isotopologue)) +
         geom_bar(stat = "identity", position = "dodge") +
         labs(x = "Group", y = "Abundance", title = paste("Isotopologue distribution across groups —", plot_settings$metabolite_time_table, "at time", plot_settings$time_point)) +

@@ -22,7 +22,7 @@ tracerPanel <- fluidRow(
                     ))
                 ),
                 tabPanel("Pl2",
-                    box(width = NULL, fluidRow( #TODO server side fill
+                    box(width = NULL, fluidRow(
                     column(12, 
                         selectInput("metabolite",
                                     "Select Metabolite:",
@@ -97,7 +97,9 @@ tracerPanel <- fluidRow(
                                     "Select Plot Type", 
                                     choices = c("Error bar plot" = "errorbar", "Bar Plot" = "barplot"),
                                     selected = "barplot",
-                                    multiple = FALSE)
+                                    multiple = FALSE),
+                        
+                        actionButton("update_iso_plot", "Generate plot")
                         #TODO add warning for excluded samples
                     )),
                     fluidRow(
