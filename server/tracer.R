@@ -1,4 +1,6 @@
 mfa <- reactiveValues(
+  selected = NULL,
+  threshold_data = NULL,
   tracer_data = NULL,
   tracer_sequence = NULL,
   normalized_a0 = NULL,
@@ -140,13 +142,31 @@ observeEvent(input$inputTracerSequence, {
   )
 
 
+### OVERVIEW PANEL ###
+
+observeEvent(input$update_threshold, {
+  req(input$intensity_threshold, mfa$tracer_data)
+  threshold <- as.numeric(input$intensity_threshold)
+
+  print(paste("Updating intensity threshold to:", threshold))
+
+  if (!is.null(mfa$tracer_data)) {
+
+    filtered_data <- mfa$tracer_data[rowSums(mfa$tracer_data[, mfa$isotopologues], na.rm = TRUE) >= threshold, ]
+
+    output$tracer_table <- renderDT({
+      filtered_data
+    })
+
+    mfa$threshold_data <- filtered_data
+  }
+})
+
 
 ### Panel 2 ###
 
 output$tracer_plot_ref <- renderPlotly({
-  req(mfa$tracer_data)
-  req(input$metabolite)
-  req(input$sample)
+  req(mfa$tracer_data, input$metabolite, input$sample)
 
   plot_settings$metabolite <- input$metabolite
   plot_settings$sample <- input$sample
@@ -167,17 +187,17 @@ output$tracer_plot_rowsum <- renderPlot({
   plotIsotopologueDist(mfa$tracer_data, plot_settings)
 })
 
-output$tracer_table <- renderDT({
-  req(mfa$tracer_data)
-  req(input$metabolite)
-  req(input$sample)
-
-  plot_settings$metabolite <- input$metabolite
-  plot_settings$sample <- input$sample
-
-  metabolite_data <- mfa$tracer_data[mfa$tracer_data$Analyte == plot_settings$metabolite & mfa$tracer_data$Analysis == plot_settings$sample, ]
-  metabolite_data
-})
+#output$tracer_table <- renderDT({
+#  req(mfa$tracer_data)
+#  req(input$metabolite)
+#  req(input$sample)
+#
+#  plot_settings$metabolite <- input$metabolite
+#  plot_settings$sample <- input$sample
+#
+#  metabolite_data <- mfa$tracer_data[mfa$tracer_data$Analyte == #plot_settings$metabolite & mfa$tracer_data$Analysis == plot_settings$sample, ]
+#  metabolite_data
+#})
 
 
 ### Panel 3 ###

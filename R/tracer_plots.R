@@ -65,7 +65,7 @@ plotFractionalContribution <- function(data, sequence, plot_settings) {
 # Plot metabolite & sample "Isotopologue distribution — [metabolite] (Normalized to total%)"
 plotIsotopologueDist <- function(data, plot_settings) {
     metabolite_data <- data[data$Analyte == plot_settings$metabolite & data$Analysis == plot_settings$sample, ]
-    
+
     melted_data <- reshape2::melt(metabolite_data, id.vars = c("Analyte", "Analysis"), variable.name = "isotopologue", value.name = "abundance")
 
     plot <- ggplot(melted_data, aes(x = isotopologue, y = abundance, fill = isotopologue)) +
@@ -130,8 +130,6 @@ plotStackedIsotopologues <- function(data, plot_settings) {
     }
     melted_data$isotopologue <- factor(melted_data$isotopologue, levels = iso_levels)
 
-    print(melted_data)
-    
     # Plot
     plot <- ggplot(melted_data, aes(x = Analysis, y = abundance, fill = isotopologue)) +
         geom_col(position = "stack") +
