@@ -7,7 +7,7 @@ tracerPanel <- fluidRow(
                         column(12, fileInput("inputTracerSequence", "Upload file (.txt or .csv)",
                                          accept = c("txt/csv", "text/comma-seperated-values, text/plain", ".csv"),
                                          width = "100%")),
-                        column(12, tableOutput("tracer_sequence") %>% withSpinner(color="steelblue"))
+                        column(12, DTOutput("tracer_sequence") %>% withSpinner(color="steelblue"))
                     ))
                 ),
                 tabPanel("Pl1",
@@ -71,7 +71,7 @@ tracerPanel <- fluidRow(
                                     "Select Metabolite:",
                                     choices = NULL,
                                     selected = ""),
-                        selectInput("group",
+                        selectInput("group_iso",
                                     "Select Group:",
                                     choices = NULL,
                                     selected = ""),
@@ -114,7 +114,7 @@ tracerPanel <- fluidRow(
                                     "Select Metabolite:",
                                     choices = NULL,
                                     selected = ""),
-                        selectInput("group_time",
+                        selectInput("time_point",
                                     "Select Time Point:",
                                     choices = NULL,
                                     selected = ""),

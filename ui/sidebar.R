@@ -37,7 +37,7 @@ sidebar <- dashboardSidebar(
                       ),
                       fluidRow(
                         style = "padding: 0px;",
-                        checkboxInput("tracer_data", "Tracer data", value = FALSE, width = "100%")
+                        checkboxInput("is_tracer_data", "Tracer data", value = FALSE, width = "100%")
                       ),
                       fluidRow(
                         style = "margin-right: 0px;",
