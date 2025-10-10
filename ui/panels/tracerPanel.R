@@ -7,19 +7,23 @@ tracerPanel <- fluidRow(
                         column(12, fileInput("inputTracerSequence", "Upload file (.txt or .csv)",
                                          accept = c("txt/csv", "text/comma-seperated-values, text/plain", ".csv"),
                                          width = "100%")),
+                        column(12, downloadButton("download_tracer_example", "Download example tracer sequence CSV")),
                         column(12, DTOutput("tracer_sequence") %>% withSpinner(color="steelblue"))
                     ))
                 ),
-                tabPanel("Pl1",
-                    box(width = NULL, fluidRow(
-                      column(12,
-                      #column(12, box(width = NULL, DTOutput("dttable") %>% withSpinner(color="steelblue")))
-                      selectInput("intensity_threshold",  
+                tabPanel("Overview",
+                    box(width = NULL, 
+                        fluidRow(
+                            column(12,
+                                selectInput("intensity_threshold",  
                                   "Select Intensity Threshold:",
                                   choices = c(100, 500, 1000, 2000, 5000, 10000),
                                   selected = 500)
-                     )
-                    ))
+                        )),
+                        fluidRow(
+                            column(12, box(width = NULL, DTOutput ("tracer_table") %>% withSpinner  (color="steelblue"))),
+                        ) 
+                    )
                 ),
                 tabPanel("Pl2",
                     box(width = NULL, fluidRow(
