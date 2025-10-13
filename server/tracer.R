@@ -55,8 +55,6 @@ validate_tracer_data <- function(data) {
   return(TRUE)
 }
 
-
-
 observeEvent(input$is_tracer_data, {
   if(input$is_tracer_data) {
 
@@ -81,7 +79,7 @@ observeEvent(input$is_tracer_data, {
         }, error = function(e) NULL) # ignore missing UI elements
       }
     }
-    update_choices(c("fc_metabolite", "ip_metabolite", "it_metabolite", "metabolite_time_table"), mfa$metabolites, type = "select")
+    update_choices(c("fc_metabolite", "ip_metabolite", "it_metabolite", "gt_metabolite"), mfa$metabolites, type = "select")
     update_choices("ip_sample", mfa$samples, type = "select")
     update_choices("it_isotopologues", mfa$isotopologues, type = "picker")
 
@@ -142,7 +140,7 @@ observeEvent(input$inputTracerSequence, {
 
   updateSelectInput(session, "fc_group", choices = mfa$groups)
   updateSelectInput(session, "it_group", choices = mfa$groups)
-  updateSelectInput(session, "time_point", choices = mfa$time_points)
+  updateSelectInput(session, "gt_group", choices = mfa$groups)
   updatePickerInput(session, "it_group_time", choices =  mfa$group_time)
 
   output$sequence <- renderDT({
@@ -178,6 +176,18 @@ observeEvent(input$update_threshold, {
       filtered_data
     })
   }
+})
+
+#TODO Update normalized data when threshold changes
+
+
+#TODO Update ggplot data when norm changes (also when sequence is uploaded)
+observeEvent(c(mfa$normalized_long_format, mfa$sequence), {
+  req(mfa$normalized_long_format, mfa$sequence)
+
+  output$ggplotdata <- renderDT({
+    mfa$normalized_long_format
+  })
 })
 
 
@@ -402,3 +412,23 @@ observeEvent(input$update_it_plot, {
 
 ### Group x Time ###
 
+output$gt_plot <- renderPlotly({
+  req(mfa$normalized_long_format, input$gt_metabolite, input$gt_group, input$gt_plot_type)
+  
+  plot_settings$metabolite <- input$gt_metabolite
+  plot_settings$group <- input$gt_group
+  plot_settings$plot_type <- input$gt_plot_type
+
+  plotGroup(mfa$normalized_long_format, mfa$sequence, plot_settings)
+})
+
+output$gt_table <- renderDT({
+  req(mfa$normalized_long_format, input$gt_metabolite, input$gt_group, input$gt_plot_type)
+  
+  plot_settings$metabolite <- input$gt_metabolite
+  plot_settings$group <- input$gt_group
+  plot_settings$plot_type <- input$gt_plot_type
+
+  selectGTtable(mfa$normalized_long_format, mfa$sequence, plot_settings)
+
+})
