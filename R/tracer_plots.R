@@ -142,11 +142,19 @@ plotStackedIsotopologues <- function(data, plot_settings) {
     }
     melted_data$Isotopologue <- factor(melted_data$Isotopologue, levels = iso_levels)
 
-
-    plot <- ggplot(melted_data, aes(x = groupTime, y = Abundance, fill = Isotopologue)) +
+    if (plot_settings$plot_type == "errorbar") {
+        plot <- ggplot(melted_data, aes(x = groupTime, y = mean_abundance, fill = Isotopologue)) +
+          geom_col(position = "stack") +
+          geom_errorbar(aes(ymin = error_lower, ymax = error_upper), width = 0.2, position = "identity") +
+          labs(x = "Group / Time", y = "Abundance", title = paste("Stacked isotopologue abundances (Mean ± SE) —", plot_settings$metabolite_iso)) +
+          theme_minimal()
+    }
+    else {
+       plot <- ggplot(melted_data, aes(x = groupTime, y = mean_abundance, fill = Isotopologue)) +
         geom_col(position = "stack") +
         labs(x = "Group / Time", y = "Abundance", title = paste("Stacked isotopologue abundances —", plot_settings$metabolite_iso)) +
         theme_minimal()
+    }
 
     plot <- ggplotly(plot)
 
