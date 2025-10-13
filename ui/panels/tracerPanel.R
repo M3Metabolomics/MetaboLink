@@ -1,19 +1,15 @@
 tracerPanel <- fluidRow(
     hidden(
         div(id = "tracer_panel",
-
             fluidRow(box(width = NULL,
                 column(12, h2("Summary")),
                 column(12,
-                       p("Please ensure that you have uploaded a valid tracer sequence file in the 'Sequence' tab before proceeding with the analysis."))
+                       p("Please ensure that you have uploaded a valid tracer sequence file before proceeding with the analysis."))
             )),
             tabsetPanel(
                 tabPanel("Overview",
                     box(width = NULL,
                         fluidRow(
-                            column(12, fileInput("inputTracerSequence", "Upload file (.txt or .csv)",
-                                             accept = c("txt/csv", "text/comma-seperated-values, text/plain", ".csv"),
-                                             width = "100%")),
                             column(12, DTOutput("tracer_sequence") %>% withSpinner(color="steelblue"))
                         ),
                         fluidRow(
@@ -118,25 +114,25 @@ tracerPanel <- fluidRow(
                 tabPanel("Group x Time",
                     box(width = NULL,
                       fluidRow(column(12,
-                        selectInput("metabolite_time_table",
+                        selectInput("gt_metabolite",
                                     "Select Metabolite:",
                                     choices = NULL,
                                     selected = ""),
-                        selectInput("time_point",
-                                    "Select Time Point:",
+                        selectInput("gt_group",
+                                    "Select Group:",
                                     choices = NULL,
                                     selected = ""),
-                        pickerInput("plot_type_time", 
+                        pickerInput("gt_plot_type", 
                                     "Select Plot Type", 
                                     choices = c("Error bar plot" = "errorbar", "Bar plot" = "barplot"),
                                     selected = "barplot",
                                     multiple = FALSE) 
                     )),
                     fluidRow(
-                        column(12, box(width = NULL, plotlyOutput("group_time_plot") %>% withSpinner(color="steelblue")))
+                        column(12, box(width = NULL, plotlyOutput("gt_plot") %>% withSpinner(color="steelblue")))
                     ),
                     fluidRow(
-                        column(12, box(width = NULL, DTOutput("group_time_table") %>% withSpinner(color="steelblue")))
+                        column(12, box(width = NULL, DTOutput("gt_table") %>% withSpinner(color="steelblue")))
                     )
                 )),
                 tabPanel("Summary",
