@@ -146,10 +146,6 @@ tracerPanel <- fluidRow(
                     fluidRow(
                         column(12, box(width = NULL, DTOutput("gt_table") %>% withSpinner(color="steelblue")))
                     )
-                )),
-                tabPanel("Summary",
-                    box(width = NULL,
-
                 ))
             )
         )   
