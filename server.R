@@ -43,7 +43,13 @@ shinyServer(function(input, output, session) {
   ##########################
   
   observeEvent(list(c(input$sequence, input$example, input$upload)), {
-    windowselect("sequence")
+    if(input$experimentType == "Tracing") {
+      updateButton(session, "tracer_button", disabled = FALSE)
+      windowselect("tracer")
+    } else {
+      windowselect("sequence")
+      disable("tracer_button")
+    }
   }, ignoreInit = T)
   observeEvent(input$explore, {
     windowselect("datatable")
