@@ -97,6 +97,39 @@ observeEvent(input$is_tracer_data, {
 
 
 observeEvent(input$inputTracerSequence, {
+    valid <- validate_tracer_data(rv$data[[rv$activeFile]])
+    if (!valid) {  return()  }
+  
+    mfa$raw <- rv$data[[rv$activeFile]]
+    mfa$metabolites <- unique(mfa$raw$Analyte)
+    mfa$isotopologues <- grep("^A\\+", colnames(mfa$raw), value = TRUE) #TODO: read also M+X, other patterns?
+    mfa$samples <- unique(mfa$raw$Analysis)
+
+
+    update_choices <- function(ids, choices, type = c("select", "picker")) {
+      type <- match.arg(type)
+      for (id in ids) {
+        tryCatch({
+          if (type == "select") {
+            updateSelectInput(session, id, choices = choices)
+          } else {
+            updatePickerInput(session, id, choices = choices)
+          }
+        }, error = function(e) NULL) # ignore missing UI elements
+      }
+    }
+    update_choices(c("fc_metabolite", "ip_metabolite", "it_metabolite", "gt_metabolite"), mfa$metabolites, type = "select")
+    update_choices("ip_sample", mfa$samples, type = "select")
+    update_choices("it_isotopologues", mfa$isotopologues, type = "picker")
+
+    #TODO: deal with threshold since it has to be applied before normalization
+
+
+    # Normalization
+    numerical_cols <- mfa$raw[, mfa$isotopologues, drop = FALSE]
+    normalized_sum <- numerical_cols / rowSums(numerical_cols, na.rm = TRUE)
+    mfa$normalized_sum <- cbind(mfa$raw[, c("Analyte", "Analysis")], normalized_sum)    
+
   sequence <- tryCatch(
     read.csv(input$inputTracerSequence$datapath, header = TRUE, stringsAsFactors = FALSE),
     error = function(e) NULL
@@ -143,7 +176,7 @@ observeEvent(input$inputTracerSequence, {
   updateSelectInput(session, "gt_group", choices = mfa$groups)
   updatePickerInput(session, "it_group_time", choices =  mfa$group_time)
 
-  output$sequence <- renderDT({
+  output$tracer_sequence <- renderDT({
     mfa$sequence
   })
 
@@ -161,11 +194,30 @@ observeEvent(input$inputTracerSequence, {
 observeEvent(input$update_threshold, {
   req(input$intensity_threshold, mfa$raw)
   threshold <- as.numeric(input$intensity_threshold)
-
   if (!is.null(mfa$raw)) {
+    raw_rows <- paste(mfa$raw$Analyte, mfa$raw$Analysis, sep = ": ")
 
     filtered_data <- mfa$raw[rowSums(mfa$raw[, mfa$isotopologues], na.rm = TRUE) >= threshold, ]
 
+    output$threshold_warning <- renderUI({
+      if (nrow(filtered_data) < nrow(mfa$raw)) {
+        # Check which samples were removed for which metabolites
+        filtered_rows <- paste(filtered_data$Analyte, filtered_data$Analysis, sep = ": ")
+        removed_samples <- setdiff(raw_rows, filtered_rows)
+        div(
+          style = "color: orange;",
+          tags$strong("Removed rows:"),
+          tags$ul(
+            lapply(removed_samples, function(x) tags$li(x))
+          )
+        )
+      } else {
+        div(
+          style = "color: green;",
+          "Intensity threshold applied successfully. No data points were removed."
+        )
+      }
+    })
     output$tracer_table <- renderDT({
       filtered_data
     })

@@ -10,9 +10,9 @@ tracerPanel <- fluidRow(
                 tabPanel("Overview",
                     box(width = NULL,
                         fluidRow(
-                            column(12, DTOutput("tracer_sequence") %>% withSpinner(color="steelblue"))
-                        ),
-                        fluidRow(
+                            column(12, fileInput("inputTracerSequence", "Upload file (.txt or .csv)",
+                                            accept = c("txt/csv", "text/comma-separated-values, text/plain", ".csv"),
+                                            width = "100%")),
                             column(12,
                                 selectInput("intensity_threshold",  
                                   "Select Intensity Threshold:",
@@ -20,10 +20,22 @@ tracerPanel <- fluidRow(
                                   selected = 500)
                             ),
                             column(12, 
-                                actionButton("update_threshold", "Update threshold")
+                                actionButton("update_threshold", "Update Threshold")                
+                            ),
+                            column(12, 
+                                uiOutput("threshold_warning")
                             )
                         ),
                         fluidRow(
+                            column(12, 
+                                h2("Metadata"),
+                                DTOutput("tracer_sequence") %>% withSpinner(color="steelblue")
+                            )
+                        ),
+                        fluidRow(
+                            column(12, 
+                                h2("Tracing Data Overview")
+                            ),
                             column(12, DTOutput("tracer_table") %>% withSpinner (color="steelblue")),
                             column(12, DTOutput("ggplotdata") %>% withSpinner(color="steelblue"))
                         ) 
