@@ -44,7 +44,6 @@ library(scales)
 
 # pathway 
 library(clusterProfiler)
-# library(org.Mm.eg.db)
 
 library(ggraph)
 library(tidygraph)
@@ -59,10 +58,6 @@ library(ggnetwork)
 
 # lipid heatmap
 library("lipidomeR") # new, used in Lipid Heatmap
-
-
-#options(repos = BiocManager::repositories())
-source("functions.R")
 
 # Source files in R folder
 rFiles <- list.files("./R", pattern = "\\.R$", full.names = TRUE)
