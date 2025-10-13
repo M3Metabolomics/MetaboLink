@@ -40,7 +40,8 @@ body <- dashboardBody(
                        label = "Tracer analysis",
                        icon = icon("vial"),
                        style = "default",
-                       block = TRUE
+                       block = TRUE,
+                       disabled = TRUE
     )),
   ))),
 
