@@ -30,14 +30,17 @@ sidebar <- dashboardSidebar(
                                )
                       ),
                       fluidRow(style = "padding: 0px;",
+                               selectInput("experimentType", "Select experiment type",
+                                           choices = c("Quantitative", "Tracing"),
+                                           selected = "Quantitative",
+                                           width = "100%"
+                               )
+                      ),
+                      fluidRow(style = "padding: 0px;",
                                fileInput("inputFile", "Upload file (.txt or .csv)",
                                          accept = c("txt/csv", "text/comma-seperated-values, text/plain", ".csv"),
                                          width = "100%"
                                )
-                      ),
-                      fluidRow(
-                        style = "padding: 0px;",
-                        checkboxInput("is_tracer_data", "Tracer data", value = FALSE, width = "100%")
                       ),
                       fluidRow(
                         style = "margin-right: 0px;",
