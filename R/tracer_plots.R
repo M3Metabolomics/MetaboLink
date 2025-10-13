@@ -11,7 +11,43 @@ normalizeReference <- function(data) {
     return(normalized)
 }
 
+format4ggplot <- function(data, sequence, isotopologues) {
+    colnames(sequence)[which(names(sequence) == "sample")] <- "Analysis"
+    merged_df <- left_join(data, sequence, by = "Analysis")
 
+    pivoted <- merged_df %>%
+      pivot_longer(
+        cols = all_of(isotopologues),
+        names_to = "Isotopologue",
+        values_to = "Abundance"
+      ) %>%
+      select(Analyte, Isotopologue, Abundance, Analysis, Time = time, Group = group, groupTime = group_time) %>%
+      filter(!is.na(Abundance))
+  
+      # Order isotopologues by the numeric part after '+' (A+0, A+1, A+2, A+10 -> correct numeric order)
+    iso_levels <- unique(pivoted$Isotopologue)
+    nums <- suppressWarnings(as.numeric(gsub(".*\\+(\\d+).*", "\\1", iso_levels)))
+    if (all(!is.na(nums))) {
+      iso_levels <- iso_levels[order(nums)]
+    } else {
+      iso_levels <- sort(iso_levels)
+    }
+    pivoted$Isotopologue <- factor(pivoted$Isotopologue, levels = iso_levels)
+
+    # Ensure time is numeric and order groupTime by Group then Time
+    pivoted$Time <- as.numeric(as.character(pivoted$Time))
+    group_levels <- pivoted %>%
+      dplyr::distinct(Group, Time, groupTime) %>%
+      arrange(Group, Time) %>%
+      pull(groupTime)
+
+    group_levels <- unique(group_levels)
+    pivoted$groupTime <- factor(pivoted$groupTime, levels = group_levels)
+    pivoted$Group <- factor(pivoted$Group, levels = unique(pivoted$Group))
+  
+
+    return(pivoted)
+}
 
 # FRACTIONAL CONTRIBUTION
 
@@ -66,26 +102,9 @@ plotFractionalContribution <- function(data, sequence, plot_settings) {
 plotIsotopologueDist <- function(data, plot_settings) {
     metabolite_data <- data[data$Analyte == plot_settings$metabolite & data$Analysis == plot_settings$sample, ]
 
-    melted_data <- reshape2::melt(metabolite_data, id.vars = c("Analyte", "Analysis"), variable.name = "isotopologue", value.name = "abundance")
-
-    plot <- ggplot(melted_data, aes(x = isotopologue, y = abundance, fill = isotopologue)) +
+    plot <- ggplot(metabolite_data, aes(x = Isotopologue, y = Abundance, fill = Isotopologue)) +
         geom_bar(stat = "identity") +
         labs(x = "Isotopologues", y = "Abundance", title = paste("Isotopologue distribution —", plot_settings$metabolite, "(Normalized to total%)")) +
-        theme_minimal() +
-        theme(legend.position = "none")
-
-    return(plot)
-}
-
-
-# Plot metabolite & sample (A.0 normalized): "Isotopologue distribution — [metabolite] (Normalized to A.0)"
-plotIsotopologueDistA0 <- function(data, plot_settings) {
-    metabolite_data <- data[data$Analyte == plot_settings$metabolite & data$Analysis == plot_settings$sample, ]
-    melted_data <- reshape2::melt(metabolite_data, id.vars = c("Analyte", "Analysis"), variable.name = "isotopologue", value.name = "abundance")
-
-    plot <- ggplot(melted_data, aes(x = isotopologue, y = abundance, fill = isotopologue)) +
-        geom_bar(stat = "identity") +
-        labs(x = "Isotopologues", y = "Abundance", title = paste("Isotopologue distribution —", plot_settings$metabolite, "(Normalized to A.0)")) +
         theme_minimal() +
         theme(legend.position = "none")
 
@@ -97,14 +116,9 @@ plotIsotopologueDistA0 <- function(data, plot_settings) {
 # Plot one metabolite "Isotopologue profile over time — [metabolite] (Group: [group])" and errorbar variant "Mean isotopologue abundance ± SE — [metabolite] (Group: [group])"
 plotIsotopologueProfile <- function(data, sequence, plot_settings) {
     # Filter data for selected metabolite and group
-    group_data <- sequence[sequence[,'group'] %in% plot_settings$group, 'sample']
-    filtered_data <- data[data$Analyte == plot_settings$metabolite & data$Analysis == group_data, ]
-    
-    # Melt data to long format
-    melted_data <- reshape2::melt(filtered_data, id.vars = c("Analyte", "Analysis", "time"), variable.name = "isotopologue", value.name = "abundance")
-    
-    # Plot
-    plot <- ggplot(melted_data, aes(x = time, y = abundance, color = isotopologue)) +
+    filtered_data <- data[data$Analyte == plot_settings$metabolite & data$Group %in% plot_settings$group, ]
+     
+    plot <- ggplot(filtered_data, aes(x = Time, y = Abundance, color = Isotopologue)) +
         geom_line() +
         geom_point() +
         labs(x = "Time", y = "Abundance", title = paste("Isotopologue profile over time —", plot_settings$metabolite, "(Group:", plot_settings$group_time, ")")) +
@@ -116,11 +130,9 @@ plotIsotopologueProfile <- function(data, sequence, plot_settings) {
 # Plot isotopologues stacked (per group_time): "Stacked isotopologue abundances — [metabolite] ([Raw/Normalized])" and errorbar variant "Stacked isotopologue abundances (Mean ± SE) — [metabolite] ([Raw/Normalized])"
 plotStackedIsotopologues <- function(data, plot_settings) {
     
-    # Melt data to long format
-    melted_data <- reshape2::melt(data, id.vars = c("Analyte", "Analysis"), variable.name = "isotopologue", value.name = "abundance")
-
+    melted_data <- data
     # ensure isotopologue is ordered so A+0 is at the bottom of stacked bars
-    iso_levels <- unique(melted_data$isotopologue)
+    iso_levels <- unique(melted_data$Isotopologue)
     # try to extract numeric part after '+' to sort numerically; fallback to lexical order
     nums <- suppressWarnings(as.numeric(gsub(".*\\+(\\d+).*", "\\1", iso_levels)))
     if (all(!is.na(nums))) {
@@ -128,13 +140,15 @@ plotStackedIsotopologues <- function(data, plot_settings) {
     } else {
         iso_levels <- sort(iso_levels, decreasing = TRUE)
     }
-    melted_data$isotopologue <- factor(melted_data$isotopologue, levels = iso_levels)
+    melted_data$Isotopologue <- factor(melted_data$Isotopologue, levels = iso_levels)
 
-    # Plot
-    plot <- ggplot(melted_data, aes(x = Analysis, y = abundance, fill = isotopologue)) +
+
+    plot <- ggplot(melted_data, aes(x = groupTime, y = Abundance, fill = Isotopologue)) +
         geom_col(position = "stack") +
-        labs(x = plot_settings$group_time, y = "Abundance", title = paste("Stacked isotopologue abundances —", plot_settings$metabolite_iso)) +
+        labs(x = "Group / Time", y = "Abundance", title = paste("Stacked isotopologue abundances —", plot_settings$metabolite_iso)) +
         theme_minimal()
+
+    plot <- ggplotly(plot)
 
     return(plot)
 }
@@ -152,6 +166,51 @@ plotIsotopologueDistAcrossGroups <- function(data, plot_settings) {
         geom_bar(stat = "identity", position = "dodge") +
         labs(x = "Group", y = "Abundance", title = paste("Isotopologue distribution across groups —", plot_settings$metabolite_time_table, "at time", plot_settings$time_point)) +
         theme_minimal()
+    plot <- ggplotly(plot)
+    return(plot)
+}
 
+
+
+
+# FROM MFA3 APP
+
+plotGroup <- function(data, sequence, metabolite, group) {
+  filtered <- data %>%
+    filter(Analyte == metabolite & Group %in% group) %>%
+    select(Isotopologue, Analysis, X1, Time) %>%
+    group_by(Isotopologue, Time) %>%
+    dplyr::summarise(mean_x = mean(X1, na.rm = TRUE)) %>%
+    ungroup()
+
+  #filtered <- summarySE(filtered, measurevar = "X1", groupvars = c("Isotopologue", "Time"), na.rm=TRUE)
+
+  ggplotly(ggplot(filtered, aes(fill = Isotopologue, x = as.factor(Time), y = mean_x)) +
+    geom_bar(position = "dodge", stat = "identity") +
+    # geom_errorbar(aes(ymin=X1-se, ymax=X1+se),
+    #           linewidth=.3,    # Thinner lines
+    #           width=.2,
+    #           position=position_dodge(.9)) +
+    labs(x = "Time", y = "Abundance", title = "Group distribution") +
+    theme_bw())
+}
+
+
+# Plot 4 - relative abundance of isotopologues for mulitple metabolites, one sample
+# ALWAYS NORMALIZED DATA
+plotMultipleAnalytes <- function(data, sample, metabolites) {
+  #TODO when selecting different sized (?) metabolites, it doesn't look good
+
+    filtered <- data %>%
+        filter(Analysis == sample & Analyte %in% metabolites) %>%
+        select(Isotopologue, X1, Analyte) %>%
+        mutate(Analyte = factor(Analyte, levels = metabolites))
+
+    plot <- ggplot(filtered, aes(fill = Isotopologue, x = Analyte, y = X1)) +
+        geom_bar(position = "stack", stat = "identity") +
+        labs(x = "Metabolites", y = "Abundance", title = sample) +
+        theme_bw()
+
+    plot <- ggplotly(plot)
     return(plot)
 }

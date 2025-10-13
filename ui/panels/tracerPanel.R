@@ -15,7 +15,8 @@ tracerPanel <- fluidRow(
                                          accept = c("txt/csv", "text/comma-seperated-values, text/plain", ".csv"),
                                          width = "100%")),
                         column(12, downloadButton("download_tracer_example", "Download example tracer sequence CSV")),
-                        column(12, DTOutput("tracer_sequence") %>% withSpinner(color="steelblue"))
+                        column(12, DTOutput("tracer_sequence") %>% withSpinner(color="steelblue")),
+                        column(12, DTOutput("ggplotdata") %>% withSpinner(color="steelblue"))
                     ))
                 ),
                 tabPanel("Overview",
@@ -54,7 +55,7 @@ tracerPanel <- fluidRow(
                                     multiple = FALSE)
                     )),
                     fluidRow(
-                        column(12, box(width = NULL, plotOutput("fc_plot") %>% withSpinner(color="steelblue")))
+                        column(12, box(width = NULL, plotlyOutput("fc_plot") %>% withSpinner(color="steelblue")))
                     ),
                     fluidRow(
                         column(12, box(width = NULL, DTOutput("fc_table") %>% withSpinner(color="steelblue")))
@@ -73,8 +74,7 @@ tracerPanel <- fluidRow(
                                     selected = "")
                     )),
                     fluidRow(
-                        column(12, box(width = NULL, plotOutput("tracer_plot_ref") %>% withSpinner(color="steelblue"))),
-                        column(12, box(width = NULL, plotOutput("tracer_plot_rowsum") %>% withSpinner(color="steelblue")))
+                        column(12, box(width = NULL, plotlyOutput("tracer_plot_rowsum") %>% withSpinner(color="steelblue")))
                     )
                 )),
                 tabPanel("Isotopologue Timecourse",
@@ -87,7 +87,7 @@ tracerPanel <- fluidRow(
                                     "Select Group:",
                                     choices = NULL,
                                     selected = ""),
-                        pickerInput("isotopologues",
+                        pickerInput("isotopologues_iso",
                                     "Select Isotopologues:",
                                     choices = NULL,
                                     selected = NULL,
@@ -111,14 +111,17 @@ tracerPanel <- fluidRow(
                                     selected = "barplot",
                                     multiple = FALSE),
                         
-                        actionButton("update_iso_plot", "Generate plot")
-                        #TODO add warning for excluded samples
+                        actionButton("update_iso_plot", "Generate plot"),
+                        uiOutput("exclusion_warning") #TODO
                     )),
                     fluidRow(
-                        column(12, box(width = NULL, plotOutput("iso_plot") %>% withSpinner(color="steelblue")))
+                        column(12, box(width = NULL, plotlyOutput("iso_plot") %>% withSpinner(color="steelblue")))
                     ),
                     fluidRow(
                         column(12, box(width = NULL, DTOutput("iso_table") %>% withSpinner(color="steelblue")))
+                    ),
+                    fluidRow(
+                        column(12, box(width = NULL, DTOutput("iso_table2") %>% withSpinner(color="steelblue")))
                     )
                 )),
                 tabPanel("Group x Time",
@@ -139,7 +142,7 @@ tracerPanel <- fluidRow(
                                     multiple = FALSE) 
                     )),
                     fluidRow(
-                        column(12, box(width = NULL, plotOutput("group_time_plot") %>% withSpinner(color="steelblue")))
+                        column(12, box(width = NULL, plotlyOutput("group_time_plot") %>% withSpinner(color="steelblue")))
                     ),
                     fluidRow(
                         column(12, box(width = NULL, DTOutput("group_time_table") %>% withSpinner(color="steelblue")))
