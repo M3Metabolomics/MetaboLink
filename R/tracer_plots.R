@@ -24,7 +24,7 @@ format4ggplot <- function(data, sequence, isotopologues) {
       select(Analyte, Isotopologue, Abundance, Analysis, Time = time, Group = group, groupTime = group_time) %>%
       filter(!is.na(Abundance))
   
-      # Order isotopologues by the numeric part after '+' (A+0, A+1, A+2, A+10 -> correct numeric order)
+    # Order isotopologues by the numeric part after '+' (A+0, A+1, A+2, A+10 -> correct numeric order)
     iso_levels <- unique(pivoted$Isotopologue)
     nums <- suppressWarnings(as.numeric(gsub(".*\\+(\\d+).*", "\\1", iso_levels)))
     if (all(!is.na(nums))) {
@@ -162,17 +162,24 @@ plotStackedIsotopologues <- function(data, plot_settings) {
 }
 
 
-# Plot multiple groups, one time: "Isotopologue distribution across groups — [metabolite] at time [time]" and errorbar variant add "(Mean ± SE)"
+# Plot group over time: "Isotopologue distribution over time — [metabolite] in group [group]" and errorbar variant add "(Mean ± SE)"
 plotIsotopologueDistAcrossGroups <- function(data, plot_settings) {
-    # Filter data for selected metabolite and time point
-    filtered_data <- data[data$Analyte == plot_settings$metabolite_time_table & data$time == plot_settings$time_point, ]
+    # Filter data for selected metabolite and group
+    filtered_data <- data[data$Analyte == plot_settings$metabolite & data$Group == plot_settings$group, ]
+
+    # Summarize --> mean and se for errorbar plot
+    filtered_data <- filtered_data %>%
+        group_by(Time, Isotopologue) %>%
+        summarise(mean_abundance = mean(Abundance, na.rm = TRUE),
+                  se_abundance = sd(Abundance, na.rm = TRUE) / sqrt(n()),
+                  error_lower = mean_abundance - se_abundance,
+                  error_upper = mean_abundance + se_abundance,
+                  .groups = 'drop')
     
-    # Melt data to long format
-    melted_data <- reshape2::melt(filtered_data, id.vars = c("Analyte", "Analysis", "group"), variable.name = "isotopologue", value.name = "abundance")
-    
-    plot <- ggplot(melted_data, aes(x = group, y = abundance, fill = isotopologue)) +
+
+    plot <- ggplot(filtered_data, aes(x = Time, y = mean_abundance, fill = Isotopologue)) +
         geom_bar(stat = "identity", position = "dodge") +
-        labs(x = "Group", y = "Abundance", title = paste("Isotopologue distribution across groups —", plot_settings$metabolite_time_table, "at time", plot_settings$time_point)) +
+        labs(x = "Group", y = "Abundance", title = paste("Isotopologue distribution over time —", plot_settings$metabolite, ", group", plot_settings$group)) +
         theme_minimal()
     plot <- ggplotly(plot)
     return(plot)
@@ -182,25 +189,48 @@ plotIsotopologueDistAcrossGroups <- function(data, plot_settings) {
 
 
 # FROM MFA3 APP
-
-plotGroup <- function(data, sequence, metabolite, group) {
+selectGTtable <- function(data, sequence, settings) {
   filtered <- data %>%
-    filter(Analyte == metabolite & Group %in% group) %>%
-    select(Isotopologue, Analysis, X1, Time) %>%
+    filter(Analyte == settings$metabolite & Group %in% settings$group) %>%
+    select(Isotopologue, Analysis, Abundance, Time) %>%
     group_by(Isotopologue, Time) %>%
-    dplyr::summarise(mean_x = mean(X1, na.rm = TRUE)) %>%
+    dplyr::summarise(
+        mean_x = mean(Abundance, na.rm = TRUE),
+        se = sd(Abundance, na.rm = TRUE) / sqrt(n()),
+        .groups = 'drop'
+    ) %>%
     ungroup()
 
+    filtered <- filtered[filtered$mean_x > 0, ]
+
+    iso_levels <- unique(filtered$Isotopologue)
+    # try to extract numeric part after '+' to sort numerically; fallback to lexical order
+    nums <- suppressWarnings(as.numeric(gsub(".*\\+(\\d+).*", "\\1", iso_levels)))
+    if (all(!is.na(nums))) {
+        iso_levels <- iso_levels[order(nums, decreasing = TRUE)]
+    } else {
+        iso_levels <- sort(iso_levels, decreasing = TRUE)
+    }
+    filtered$Isotopologue <- factor(filtered$Isotopologue, levels = iso_levels)
+
+  return(filtered)
+}
+
+plotGroup <- function(data, sequence, settings) {
+    
+    filtered <- selectGTtable(data, sequence, settings)
   #filtered <- summarySE(filtered, measurevar = "X1", groupvars = c("Isotopologue", "Time"), na.rm=TRUE)
 
-  ggplotly(ggplot(filtered, aes(fill = Isotopologue, x = as.factor(Time), y = mean_x)) +
-    geom_bar(position = "dodge", stat = "identity") +
+  plot <- ggplotly(ggplot(filtered, aes(fill = Isotopologue, x = as.factor(Time), y = mean_x)) +
+    geom_bar(position = "stack", stat = "identity") +
     # geom_errorbar(aes(ymin=X1-se, ymax=X1+se),
     #           linewidth=.3,    # Thinner lines
     #           width=.2,
     #           position=position_dodge(.9)) +
     labs(x = "Time", y = "Abundance", title = "Group distribution") +
     theme_bw())
+
+    return(plot)
 }
 
 
