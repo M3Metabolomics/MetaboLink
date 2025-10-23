@@ -1,18 +1,14 @@
 FROM rocker/shiny
-LABEL maintainer = "Ana Mendes <anamendesml@outlook.com>"
-LABEL description = "Docker image of MetaboLink"
+LABEL maintainer="Ana Mendes <anamendesml@outlook.com>"
+LABEL description="Docker image of MetaboLink"
 
 RUN rm -rf /srv/shiny-server/*
 COPY . /srv/shiny-server/
 WORKDIR /srv/shiny-server/
 RUN apt update; apt install -y libglpk-dev
+RUN apt-get update && apt-get install -y libmagick++-dev imagemagick
 
 
-RUN R -e "install.packages('BiocManager', repos='http://cran.us.r-project.org'); \
-        update.packages(ask=F)"
+RUN Rscript /srv/shiny-server/install_packages.R
 
-RUN R -e "library(BiocManager);BiocManager::install(c('dplyr','plotly','matrixStats','DT','gplots', \
-        'shiny','shinyBS','shinydashboard','shinycssloaders','limma','shinyjs','shinyalert', \
-        'shinyWidgets','spsComps','ggplot2','ggrepel','gridExtra','impute', \
-        'randomForest','writexl','stringi','igraph','colorspace'), ask=F)"
-        
+RUN R -e "library(devtools); devtools::install_github('selcukorkmaz/PubChemR')"
