@@ -1,7 +1,5 @@
 # Install required packages for MetaboLink
-# This script installs packages from both CRAN and Bioconductor
 
-# First, ensure BiocManager is installed
 if (!requireNamespace("BiocManager", quietly = TRUE)) {
   install.packages("BiocManager")
 }
@@ -52,7 +50,11 @@ cran_packages <- c(
   "threejs",
   "ndtv",
   "ggnetwork",
-  "devtools"
+  "devtools",
+  "factoextra",
+  "ggdendro",
+  "dbscan",
+  "PubChemR"
 )
 
 # Bioconductor packages
@@ -74,6 +76,10 @@ install.packages(cran_packages, dependencies = TRUE)
 cat("Installing Bioconductor packages...\n")
 BiocManager::install(bioc_packages, dependencies = TRUE)
 
+# Install PubChemR from GitHub if not already installed
+if (!requireNamespace("PubChemR", quietly = TRUE)) {
+  devtools::install_github("selcukorkmaz/PubChemR")
+}
 # Verify installation
 cat("Verifying package installation...\n")
 all_packages <- c(cran_packages, bioc_packages, "BiocManager")
@@ -87,8 +93,3 @@ for (pkg in all_packages) {
 }
 
 cat("Package installation complete!\n")
-
-
-# This installation of data.table has not detected OpenMP support. It should still work but in single-threaded mode.
-
-# factoextra, ggdendro, dbscan
