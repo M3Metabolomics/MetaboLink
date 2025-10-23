@@ -25,19 +25,21 @@ and access the shiny app through http://localhost:3838
 ### Clone repository
 
 ```
-git clone https://github.com/anitamnd/MetaboLink
+git clone https://github.com/M3Metabolomics/MetaboLink
 ```
 
 ### Install dependencies
 Use the following code to install the required R packages:
 
 ```
-install.packages('BiocManager', repos='http://cran.us.r-project.org')
-library(BiocManager)
-BiocManager::install(c('dplyr','plotly','shiny','shinyBS','shinydashboard','shinycssloaders','limma','shinyjs','shinyalert','shinyWidgets','spsComps','ggplot2','ggrepel','gridExtra','impute','randomForest','writexl','stringi','igraph'), ask=F)
+Rscript install.packages.R
 ```
 
-You can then run the app from the server.R or ui.R files using RStudio or run the app on a shiny-server.
+You can then run the app with:
+
+```
+R -e "shiny::runApp()"
+```
 
 ---
 
