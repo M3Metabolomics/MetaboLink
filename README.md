@@ -1,5 +1,5 @@
-[![bio.tools](https://img.shields.io/badge/bio.tools-MetaboLink-005472)](https://bio.tools/metabolink)
 [![zenodo](https://zenodo.org/badge/DOI/10.1093/bioinformatics/btae459.svg)](https://doi.org/10.1093/bioinformatics/btae459)
+[![bio.tools](https://img.shields.io/badge/bio.tools-MetaboLink-005472)](https://bio.tools/metabolink)
 [![github](https://img.shields.io/github/license/m3metabolomics/metabolink)](https://github.com/m3metabolomics/metabolink)
 
 
