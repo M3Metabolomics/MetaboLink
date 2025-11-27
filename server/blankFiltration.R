@@ -1,7 +1,7 @@
   
   observeEvent(input$blankFiltrate, {
     tryCatch({
-      validate(
+      shiny::validate(
         need(!is.null(rv$activeFile), "No data"),
         need("QC" %in% rv$sequence[[rv$activeFile]][, 1], "Data must have at least 1 QC"),
         need("Blank" %in% rv$sequence[[rv$activeFile]][, 1], "Data must have at least 1 Blank"),
