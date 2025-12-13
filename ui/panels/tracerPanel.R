@@ -78,7 +78,16 @@ tracerPanel <- fluidRow(
                                     selected = "")
                     )),
                     fluidRow(
-                        column(12, box(width = NULL, plotlyOutput("ip_plot") %>% withSpinner(color="steelblue")))
+                        column(12, 
+                            box(width = NULL,
+                                title = "Normalized to row sums", 
+                                plotlyOutput("ip_plot") %>% withSpinner(color="steelblue")))
+                    ),
+                    fluidRow(
+                        column(12, 
+                            box(width = NULL,
+                                title = "Normalized to A+0", 
+                                plotlyOutput("ip_plot_A0") %>% withSpinner(color="steelblue")))
                     )
                 )),
                 tabPanel("Isotopologue Timecourse",
@@ -104,8 +113,13 @@ tracerPanel <- fluidRow(
                                     selected = NULL,
                                     multiple = TRUE,
                                     options = list(`actions-box` = TRUE)),
+                        pickerInput("it_data_type",
+                                    "Select Data Type:",
+                                    choices = c("Raw intensities" = "raw", "Normalized (row sums)" = "normalized_sum"),
+                                    selected = "raw",
+                                    multiple = FALSE),
                         pickerInput("it_plot_type", 
-                                    "Select Plot Type", 
+                                    "Select Plot Type:", 
                                     choices = c("Error bar plot" = "errorbar", "Bar Plot" = "barplot"),
                                     selected = "barplot",
                                     multiple = FALSE),
@@ -145,6 +159,30 @@ tracerPanel <- fluidRow(
                     ),
                     fluidRow(
                         column(12, box(width = NULL, DTOutput("gt_table") %>% withSpinner(color="steelblue")))
+                    )
+                )),
+                tabPanel("Group x Time (2)",
+                    box(width = NULL,
+                      fluidRow(column(12,
+                        selectInput("metabolite_time_table",
+                                    "Select Metabolite:",
+                                    choices = NULL,
+                                    selected = ""),
+                        selectInput("time_point",
+                                    "Select Time Point:",
+                                    choices = NULL,
+                                    selected = ""),
+                        pickerInput("plot_type_time", 
+                                    "Select Plot Type", 
+                                    choices = c("Error bar plot" = "errorbar", "Bar plot" = "barplot"),
+                                    selected = "barplot",
+                                    multiple = FALSE) 
+                    )),
+                    fluidRow(
+                        column(12, box(width = NULL, plotlyOutput("group_time_plot") %>% withSpinner(color="steelblue")))
+                    ),
+                    fluidRow(
+                        column(12, box(width = NULL, DTOutput("group_time_table") %>% withSpinner(color="steelblue")))
                     )
                 ))
             )
