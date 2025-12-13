@@ -5,13 +5,30 @@ mfa <- reactiveValues(
   threshold = NULL,
   sequence = NULL,
   normalized_sum = NULL,
-  normalized_long_format = NULL
+  normalized_zero = NULL,
+  normalized_long_format = NULL,
+  normalized_long_format_ref = NULL
 )
 
-#TODO normalized_sum <- reactive ({
-#   req(mfa$raw)...
-
 metadata <- reactiveValues(
+  metabolites = NULL,
+  isotopologues = NULL,
+  samples = NULL,
+  groups = NULL,
+  group_time = NULL,
+  time_points = NULL
+)
+
+# Threshold data - separate for easier access and to keep raw intact
+threshold <- reactiveValues(
+  data = NULL,
+  normalized_sum = NULL,
+  normalized_zero = NULL,
+  long_format_sum = NULL,
+  long_format_zero = NULL
+)
+
+threshold_metadata <- reactiveValues(
   metabolites = NULL,
   isotopologues = NULL,
   samples = NULL,
@@ -29,8 +46,8 @@ plot_settings <- reactiveValues(
   plot_type = "barplot",
   metabolite_time_table = NULL,
   group_time = NULL,
-  plot_type_time = "barplot"
-
+  plot_type_time = "barplot",
+  data_type = "normalized_sum",
 )
 
 validate_tracer_data <- function(data) {
@@ -62,9 +79,9 @@ observeEvent(input$is_tracer_data, {
     if (!valid) {  return()  }
 
     mfa$raw <- rv$data[[rv$activeFile]]
-    mfa$metabolites <- unique(mfa$raw$Analyte)
-    mfa$isotopologues <- grep("^A\\+", colnames(mfa$raw), value = TRUE) #TODO: read also M+X, other patterns?
-    mfa$samples <- unique(mfa$raw$Analysis)
+    metadata$metabolites <- unique(mfa$raw$Analyte)
+    metadata$isotopologues <- grep("^A\\+", colnames(mfa$raw), value = TRUE) #TODO: read also M+X, other patterns?
+    metadata$samples <- unique(mfa$raw$Analysis)
 
 
     update_choices <- function(ids, choices, type = c("select", "picker")) {
@@ -79,19 +96,29 @@ observeEvent(input$is_tracer_data, {
         }, error = function(e) NULL) # ignore missing UI elements
       }
     }
-    update_choices(c("fc_metabolite", "ip_metabolite", "it_metabolite", "gt_metabolite"), mfa$metabolites, type = "select")
-    update_choices("ip_sample", mfa$samples, type = "select")
-    update_choices("it_isotopologues", mfa$isotopologues, type = "picker")
+    update_choices(c("fc_metabolite", "ip_metabolite", "it_metabolite", "gt_metabolite", "metabolite_time_table", "mp_metabolite"), metadata$metabolites, type = "select")
+    update_choices("ip_sample", metadata$samples, type = "select")
+    update_choices("it_isotopologues", metadata$isotopologues, type = "picker")
 
 
     #TODO: deal with threshold since it has to be applied before normalization
 
 
     # Normalization
-    numerical_cols <- mfa$raw[, mfa$isotopologues, drop = FALSE]
-    normalized_sum <- numerical_cols / rowSums(numerical_cols, na.rm = TRUE)
-    mfa$normalized_sum <- cbind(mfa$raw[, c("Analyte", "Analysis")], normalized_sum)      
+    numerical_cols <- mfa$raw[, metadata$isotopologues, drop = FALSE]
 
+    normalized_sum <- numerical_cols / rowSums(numerical_cols, na.rm = TRUE)
+    mfa$normalized_sum <- cbind(mfa$raw[, c("Analyte", "Analysis")], normalized_sum)
+
+    # Normalize each row by the first isotopologue (typically A+0)
+    normalized_zero <- sweep(
+      numerical_cols,
+      MARGIN = 1,
+      STATS = mfa$raw[[metadata$isotopologues[1]]],
+      FUN = "/"
+    )
+    print(head(normalized_zero))
+    mfa$normalized_zero <- cbind(mfa$raw[, c("Analyte", "Analysis")], normalized_zero)
   }
 })
 
@@ -101,9 +128,9 @@ observeEvent(input$inputTracerSequence, {
     if (!valid) {  return()  }
   
     mfa$raw <- rv$data[[rv$activeFile]]
-    mfa$metabolites <- unique(mfa$raw$Analyte)
-    mfa$isotopologues <- grep("^A\\+", colnames(mfa$raw), value = TRUE) #TODO: read also M+X, other patterns?
-    mfa$samples <- unique(mfa$raw$Analysis)
+    metadata$metabolites <- unique(mfa$raw$Analyte)
+    metadata$isotopologues <- grep("^A\\+", colnames(mfa$raw), value = TRUE) #TODO: read also M+X, other patterns?
+    metadata$samples <- unique(mfa$raw$Analysis)
 
 
     update_choices <- function(ids, choices, type = c("select", "picker")) {
@@ -118,17 +145,27 @@ observeEvent(input$inputTracerSequence, {
         }, error = function(e) NULL) # ignore missing UI elements
       }
     }
-    update_choices(c("fc_metabolite", "ip_metabolite", "it_metabolite", "gt_metabolite"), mfa$metabolites, type = "select")
-    update_choices("ip_sample", mfa$samples, type = "select")
-    update_choices("it_isotopologues", mfa$isotopologues, type = "picker")
+    update_choices(c("fc_metabolite", "ip_metabolite", "it_metabolite", "gt_metabolite", "metabolite_time_table", "mp_metabolite"), metadata$metabolites, type = "select")
+    update_choices("ip_sample", metadata$samples, type = "select")
+    update_choices("it_isotopologues", metadata$isotopologues, type = "picker")
+
 
     #TODO: deal with threshold since it has to be applied before normalization
 
 
     # Normalization
-    numerical_cols <- mfa$raw[, mfa$isotopologues, drop = FALSE]
+    numerical_cols <- mfa$raw[, metadata$isotopologues, drop = FALSE]
     normalized_sum <- numerical_cols / rowSums(numerical_cols, na.rm = TRUE)
-    mfa$normalized_sum <- cbind(mfa$raw[, c("Analyte", "Analysis")], normalized_sum)    
+    mfa$normalized_sum <- cbind(mfa$raw[, c("Analyte", "Analysis")], normalized_sum)
+
+    # Normalize each row by the first isotopologue (typically A+0)
+    normalized_zero <- sweep(
+      numerical_cols,
+      MARGIN = 1,
+      STATS = mfa$raw[[metadata$isotopologues[1]]],
+      FUN = "/"
+    )
+    mfa$normalized_zero <- cbind(mfa$raw[, c("Analyte", "Analysis")], normalized_zero)
 
   sequence <- tryCatch(
     read.csv(input$inputTracerSequence$datapath, header = TRUE, stringsAsFactors = FALSE),
@@ -166,21 +203,25 @@ observeEvent(input$inputTracerSequence, {
 
   # update reactive values and UI
   mfa$sequence <- sequence
-  mfa$groups <- unique(sequence$group)
-  mfa$time_points <- sort(unique(sequence$time))
-  mfa$group_time <- unique(paste(sequence$group, sequence$time, sep = "_")) #TODO should be sorted by group then time
+  metadata$groups <- unique(sequence$group)
+  metadata$time_points <- sort(unique(sequence$time))
+  metadata$group_time <- unique(paste(sequence$group, sequence$time, sep = "_")) #TODO should be sorted by group then time
   mfa$sequence$group_time <- paste(sequence$group, sequence$time, sep = "_")
 
-  updateSelectInput(session, "fc_group", choices = mfa$groups)
-  updateSelectInput(session, "it_group", choices = mfa$groups)
-  updateSelectInput(session, "gt_group", choices = mfa$groups)
-  updatePickerInput(session, "it_group_time", choices =  mfa$group_time)
+  updateSelectInput(session, "fc_group", choices = metadata$groups)
+  updateSelectInput(session, "it_group", choices = metadata$groups)
+  updateSelectInput(session, "gt_group", choices = metadata$groups)
+  updateSelectInput(session, "mp_group", choices = metadata$groups)
+  updateSelectInput(session, "time_point", choices = metadata$time_points)
+  updatePickerInput(session, "it_group_time", choices =  metadata$group_time)
 
   output$tracer_sequence <- renderDT({
     mfa$sequence
   })
 
-  mfa$normalized_long_format <- format4ggplot(mfa$normalized_sum, mfa$sequence, mfa$isotopologues)
+  mfa$normalized_long_format <- format4ggplot(mfa$normalized_sum, mfa$sequence, metadata$isotopologues)
+
+  mfa$normalized_long_format_ref <- format4ggplot(mfa$normalized_zero, mfa$sequence, metadata$isotopologues)
 
   output$ggplotdata <- renderDT({
     mfa$normalized_long_format
@@ -197,7 +238,7 @@ observeEvent(input$update_threshold, {
   if (!is.null(mfa$raw)) {
     raw_rows <- paste(mfa$raw$Analyte, mfa$raw$Analysis, sep = ": ")
 
-    filtered_data <- mfa$raw[rowSums(mfa$raw[, mfa$isotopologues], na.rm = TRUE) >= threshold, ]
+    filtered_data <- mfa$raw[rowSums(mfa$raw[, metadata$isotopologues], na.rm = TRUE) >= threshold, ]
 
     output$threshold_warning <- renderUI({
       if (nrow(filtered_data) < nrow(mfa$raw)) {
@@ -222,7 +263,7 @@ observeEvent(input$update_threshold, {
       filtered_data
     })
 
-    mfa$threshold <- filtered_data
+    threshold$data <- filtered_data
 
     output$tracer_table <-renderDT({
       filtered_data
@@ -287,6 +328,7 @@ output$fc_table <- renderDT({
 
 ### Isotopologue Profiles ###
 
+# Normalized to row sums
 output$ip_plot <- renderPlotly({
   req(mfa$normalized_long_format, input$ip_metabolite, input$ip_sample)
 
@@ -295,6 +337,17 @@ output$ip_plot <- renderPlotly({
 
   plotIsotopologueDist(mfa$normalized_long_format, plot_settings)
 })
+
+# Normalized to A.0
+output$ip_plot_A0 <- renderPlotly({
+  req(mfa$normalized_long_format_ref, input$ip_metabolite, input$ip_sample)
+
+  plot_settings$metabolite <- input$ip_metabolite
+  plot_settings$sample <- input$ip_sample
+  
+  plotIsotopologueDist2(mfa$normalized_long_format_ref, plot_settings)
+})
+
 
 ### Isotopologue Timecourse ###
 observeEvent(input$it_metabolite, {
@@ -462,6 +515,19 @@ observeEvent(input$update_it_plot, {
 })
 
 
+### Metabolite per group ###
+output$mp_plot <- renderPlotly({
+  req(mfa$normalized_long_format, mfa$sequence, input$mp_metabolite, input$mp_group, input$mp_plot_type)
+  
+  plot_settings$metabolite <- input$mp_metabolite
+  plot_settings$group <- input$mp_group
+  plot_settings$plot_type <- input$mp_plot_type
+  
+  plotIsotopologue(mfa$normalized_long_format, mfa$sequence, plot_settings)
+
+})
+
+
 ### Group x Time ###
 
 output$gt_plot <- renderPlotly({
@@ -482,5 +548,17 @@ output$gt_table <- renderDT({
   plot_settings$plot_type <- input$gt_plot_type
 
   selectGTtable(mfa$normalized_long_format, mfa$sequence, plot_settings)
+
+})
+
+### Group x Time (2) ###
+output$group_time_plot <- renderPlotly({
+  req(mfa$normalized_long_format_ref, mfa$sequence, input$metabolite_time_table, input$time_point, input$plot_type_time)
+  
+  plot_settings$metabolite <- input$metabolite_time_table
+  plot_settings$time_points <- input$time_point
+  plot_settings$plot_type <- input$plot_type_time
+  
+  plotGroupTime(mfa$normalized_long_format_ref, mfa$sequence, plot_settings)
 
 })

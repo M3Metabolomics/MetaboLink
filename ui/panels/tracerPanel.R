@@ -137,6 +137,27 @@ tracerPanel <- fluidRow(
                         column(12, box(width = NULL, DTOutput("it_table2") %>% withSpinner(color="steelblue")))
                     )
                 )),
+                tabPanel("Metabolite Pool",
+                  box(width = NULL, 
+                    fluidRow(column(12, 
+                        selectInput("mp_metabolite",
+                                    "Select Metabolite:",
+                                     choices = NULL,
+                                     selected = ""),
+                        selectInput("mp_group",
+                                    "Select Group:",
+                                     choices = NULL,
+                                     selected = ""),
+                        pickerInput("mp_plot_type",
+                                    "Select Plot Type:",
+                                     choices = c("Error bar plot"= "errorbar", "Bar plot" = "barplot"),
+                                     selected = "barplot",
+                                     multiple = FALSE)
+                      )),
+                      fluidRow(
+                        column(12, box(width = NULL, plotlyOutput("mp_plot") %>% withSpinner(color="steelblue")))
+                    )
+                )),
                 tabPanel("Group x Time",
                     box(width = NULL,
                       fluidRow(column(12,

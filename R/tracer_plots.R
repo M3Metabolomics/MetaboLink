@@ -252,3 +252,117 @@ plotMultipleAnalytes <- function(data, sample, metabolites) {
     plot <- ggplotly(plot)
     return(plot)
 }
+
+#Metabolite per group
+plotIsotopologue <- function(data, sequence, plot_settings) {
+  if (plot_settings$plot_type == "barplot") {
+    # Bar plot logic
+    metabolite_data <- data[data$Analyte == plot_settings$metabolite, ]
+    
+    plot <- ggplot(metabolite_data, aes(x = as.factor(Time), y = Abundance, fill = Isotopologue)) +
+      geom_bar(position = "dodge", stat = "identity") +
+      labs(
+        x = "Time", 
+        y = "Relative Abundance", 
+        title = paste("Isotopologue distribution across time -", plot_settings$metabolite),
+        fill = "Isotopologue"
+      ) +
+      theme_minimal()
+    
+  } else if (plot_settings$plot_type == "errorbar") {
+    # Error bar plot logic
+    filtered_data <- data[data$Analyte == plot_settings$metabolite, ]
+    
+    # Calculate summary statistics
+    summary_data <- filtered_data %>%
+      group_by(Isotopologue, Time) %>%
+      summarise(
+        mean_abundance = mean(Abundance, na.rm = TRUE),
+        se_abundance = sd(Abundance, na.rm = TRUE) / sqrt(n()),
+        .groups = 'drop'
+      )
+    
+    plot <- ggplot(summary_data, aes(x = as.factor(Time), y = mean_abundance, 
+                                     fill = Isotopologue)) +
+      geom_bar(position = position_dodge(width = 0.9), stat = "identity", width = 0.7) +
+      geom_errorbar(
+        aes(ymin = mean_abundance - se_abundance, ymax = mean_abundance + se_abundance),
+        position = position_dodge(width = 0.9),
+        width = 0.25
+      ) +
+      labs(
+        x = "Time", 
+        y = "Relative Abundance", 
+        title = paste("Mean isotopologue abundance ± SE -", plot_settings$metabolite),
+        fill = "Isotopologue"
+      ) +
+      theme_minimal()
+  }
+  
+  return(ggplotly(plot))
+}
+
+#Group X Time Plot
+# Time Plot Function
+plotGroupTime <- function(data, sequence, plot_settings) {
+  if (plot_settings$plot_type == "errorbar") {
+    # Error bar plot logic
+    summary_data <- data %>%
+      filter(Analyte == plot_settings$metabolite, Time %in% plot_settings$time_points) %>%
+      group_by(Group, Isotopologue, Time) %>%
+      summarise(
+        mean_abundance = mean(Abundance, na.rm = TRUE),
+        se_abundance = sd(Abundance, na.rm = TRUE) / sqrt(n()),
+        .groups = 'drop'
+      )
+    
+    plot <- ggplot(summary_data, aes(x = Group, y = mean_abundance, 
+                                     fill = Isotopologue)) +
+      geom_bar(position = position_dodge(width = 0.9), stat = "identity", width = 0.7) +
+      geom_errorbar(
+        aes(ymin = mean_abundance - se_abundance, ymax = mean_abundance + se_abundance),
+        position = position_dodge(width = 0.9),
+        width = 0.25
+      ) +
+      labs(
+        x = "Group", 
+        y = "Relative Abundance", 
+        title = paste(plot_settings$metabolite, "- Time:", paste(plot_settings$time_points, collapse = ", "), "(Error Bars)"),
+        fill = "Isotopologue"
+      ) +
+      theme_minimal()
+    
+  } else {
+    # Regular bar plot logic
+    filtered_data <- data %>%
+      filter(Analyte == plot_settings$metabolite, Time %in% plot_settings$time_points)
+    
+    plot <- ggplot(filtered_data, aes(x = Group, y = Abundance, fill = Isotopologue)) +
+      geom_bar(stat = "identity", position = "dodge") +
+      labs(
+        x = "Group", 
+        y = "Relative Abundance", 
+        title = paste(plot_settings$metabolite, "- Time:", paste(plot_settings$time_points, collapse = ", ")),
+        fill = "Isotopologue"
+      ) +
+      theme_minimal()
+  }
+  
+  return(ggplotly(plot))
+}
+
+#Normalized to A.0 plot
+plotIsotopologueDist2 <- function(normalizeReference, plot_settings) {
+  metabolite_data <- normalizeReference[normalizeReference$Analyte == plot_settings$metabolite & normalizeReference$Analysis == plot_settings$sample, ]
+
+    print(metabolite_data)
+  print(nrow(metabolite_data))
+  
+  plot <- ggplot(metabolite_data, aes(x = Isotopologue, y = Abundance, fill = Isotopologue)) +
+    geom_bar(stat = "identity") +
+    labs(x = "Isotopologues", y = "Abundance", title = paste("Isotopologue distribution —", plot_settings$metabolite, "(Normalized to A.0)")) +
+    theme_minimal() +
+    theme(legend.position = "none")
+  
+  return(ggplotly(plot))
+}
