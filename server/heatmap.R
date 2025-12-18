@@ -194,6 +194,8 @@
       #  }
       #}, height = heatmap_height)
 
+      pdf(file = NULL)  # Open a null PDF device to suppress output
+
       ht1 <- draw(heatmap_plot)
       makeInteractiveComplexHeatmap(input, output, session, ht1, "heatmap_interactive")
       
