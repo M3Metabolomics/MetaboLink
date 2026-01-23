@@ -141,6 +141,7 @@ plotStackedIsotopologues <- function(data, plot_settings) {
         iso_levels <- sort(iso_levels, decreasing = TRUE)
     }
     melted_data$Isotopologue <- factor(melted_data$Isotopologue, levels = iso_levels)
+    
 
     if (plot_settings$plot_type == "errorbar") {
         plot <- ggplot(melted_data, aes(x = groupTime, y = mean_abundance, fill = Isotopologue)) +
