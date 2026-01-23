@@ -82,6 +82,7 @@ observeEvent(input$is_tracer_data, {
     metadata$metabolites <- unique(mfa$raw$Analyte)
     metadata$isotopologues <- grep("^A\\+", colnames(mfa$raw), value = TRUE) #TODO: read also M+X, other patterns?
     metadata$samples <- unique(mfa$raw$Analysis)
+    
 
 
     update_choices <- function(ids, choices, type = c("select", "picker")) {
@@ -131,7 +132,7 @@ observeEvent(input$inputTracerSequence, {
     metadata$metabolites <- unique(mfa$raw$Analyte)
     metadata$isotopologues <- grep("^A\\+", colnames(mfa$raw), value = TRUE) #TODO: read also M+X, other patterns?
     metadata$samples <- unique(mfa$raw$Analysis)
-
+    
 
     update_choices <- function(ids, choices, type = c("select", "picker")) {
       type <- match.arg(type)
@@ -222,10 +223,14 @@ observeEvent(input$inputTracerSequence, {
   mfa$normalized_long_format <- format4ggplot(mfa$normalized_sum, mfa$sequence, metadata$isotopologues)
 
   mfa$normalized_long_format_ref <- format4ggplot(mfa$normalized_zero, mfa$sequence, metadata$isotopologues)
+  
+  mfa$raw_long_format <- format4ggplot(mfa$raw, mfa$sequence, metadata$isotopologues)
 
-  output$ggplotdata <- renderDT({
-    mfa$normalized_long_format
-  })
+  #output$ggplotdata <- renderDT({
+   # mfa$normalized_long_format
+  #})
+  output$tracer_sequence <- renderDT({ mfa$sequence })
+  output$ggplotdata <- renderDT({ mfa$normalized_long_format })
 
 })
 
@@ -353,10 +358,10 @@ output$ip_plot_A0 <- renderPlotly({
 observeEvent(input$it_metabolite, {
   req(input$it_metabolite)
   req(mfa$normalized_sum)
-  req(mfa$isotopologues)
+  req(metadata$isotopologues) 
 
   metabolite_data <- mfa$normalized_sum[mfa$normalized_sum$Analyte == input$it_metabolite, ]
-  available_iso <- intersect(mfa$isotopologues, colnames(metabolite_data))
+  available_iso <- intersect(metadata$isotopologues, colnames(metabolite_data)) 
   # Remove isotologues that are all NA or zero
   available_iso <- available_iso[colSums(metabolite_data[, available_iso], na.rm = TRUE) > 0]
 
@@ -364,24 +369,42 @@ observeEvent(input$it_metabolite, {
 })
 
 observeEvent(input$update_it_plot, {
-  req(input$it_metabolite, input$it_group)
-
-  # defensive checks
-  if (is.null(mfa$normalized_long_format) || nrow(mfa$normalized_long_format) == 0) {
-    showNotification("Normalized data not available for isotopologue timecourse.", type = "error")
+  req(input$it_metabolite, input$it_group, input$it_data_type)
+  
+  # Select data based on data type
+  if (input$it_data_type == "raw") {
+    data_source <- mfa$raw_long_format
+    source_name <- "Raw"
+  } else if (input$it_data_type == "normalized_sum") {
+    data_source <- mfa$normalized_long_format
+    source_name <- "Normalized"
+  } else {
+    showNotification("Invalid data type selected.", type = "error")
     return()
   }
-  if (is.null(mfa$isotopologues) || length(mfa$isotopologues) == 0) {
+
+  # defensive checks
+  if (is.null(data_source) || nrow(data_source) == 0) {
+    showNotification(paste(source_name, "data not available for isotopologue timecourse."), type = "error")
+    return()
+  }
+  if (is.null(metadata$isotopologues) || length(metadata$isotopologues) == 0) { 
     showNotification("No isotopologue columns available.", type = "error")
     return()
   }
 
   top5_isotopologues <- NULL
-  if(input$it_show_top5) { #TODO: top5 overall or for this metabolite and group?
+  if(input$it_show_top5) {
     tryCatch(
       {
-        metabolite_data <- mfa$normalized_sum[mfa$normalized_sum$Analyte == input$it_metabolite, ]
-        available_iso <- intersect(mfa$isotopologues, colnames(metabolite_data))
+        # Get the appropriate data source for mean calculation
+        if (input$it_data_type == "raw") {
+          metabolite_data <- mfa$raw[mfa$raw$Analyte == input$it_metabolite, ]
+        } else {
+          metabolite_data <- mfa$normalized_sum[mfa$normalized_sum$Analyte == input$it_metabolite, ]
+        }
+        
+        available_iso <- intersect(metadata$isotopologues, colnames(metabolite_data))
         if (length(available_iso) == 0) {
           showNotification("No isotopologue columns found for selected metabolite.", type = "warning")
         } else {
@@ -396,6 +419,7 @@ observeEvent(input$update_it_plot, {
       }
     )
   }
+  
 
   # Pick isotopologues to keep (prefer user selection, then top5, then all)
   iso_choices <- NULL
@@ -404,7 +428,7 @@ observeEvent(input$update_it_plot, {
   } else if (!is.null(top5_isotopologues) && length(top5_isotopologues) > 0) {
     iso_choices <- top5_isotopologues
   } else {
-    iso_choices <- mfa$isotopologues
+    iso_choices <- metadata$isotopologues 
   }
   if(length(iso_choices) == 0) {
     showNotification("No isotopologues selected or available for plotting.", type = "error")
@@ -413,7 +437,7 @@ observeEvent(input$update_it_plot, {
 
    # filter data safely
   data <- tryCatch({
-    df <- mfa$normalized_long_format
+    df <- data_source
     df <- df[df$Analyte == input$it_metabolite, ]
     df <- df[df$Group %in% input$it_group, ]
     df <- df[df$Isotopologue %in% iso_choices, ]
@@ -462,14 +486,10 @@ observeEvent(input$update_it_plot, {
     }
   })
 
-  # Replicates per time point and normalize
-  # 1) normalize within each Analysis for given Analyte so isotopologues sum to 1
-  # 2) summarize replicates per analyte + group_time + isotopologue 
+  # Replicates per time point - only normalize if using normalized data
   summarized <- tryCatch({
-    data %>%
-      dplyr::group_by(Analyte, Analysis) %>%
-      dplyr::mutate(Abundance = Abundance / sum(Abundance, na.rm = TRUE)) %>%
-      dplyr::ungroup() %>%
+    summarized_data <- data %>%
+      
       dplyr::group_by(groupTime, Isotopologue) %>%
       dplyr::summarise(
         n_replicates = n_distinct(Analysis),
@@ -488,20 +508,30 @@ observeEvent(input$update_it_plot, {
         error_upper = segment_center + se_abundance
       ) %>%
       dplyr::ungroup()
-
+    
+    summarized_data
+    
   }, error = function(e) {
     showNotification(paste("Error summarizing data:", conditionMessage(e)), type = "error")
     return(NULL)
   })
+  
   if (is.null(summarized) || nrow(summarized) == 0) {
     showNotification("No summarized data to plot.", type = "warning")
     return()
   }
-
+  
   output$it_table  <- renderDT({ data })
   output$it_table2 <- renderDT({ summarized })
 
-  settings <- list(metabolite_iso = input$it_metabolite, group_time = input$it_group_time, plot_type = input$it_plot_type)
+  # Pass data type to plot settings
+  settings <- list(
+    metabolite_iso = input$it_metabolite, 
+    group_time = input$it_group_time, 
+    plot_type = input$it_plot_type,
+    data_type = input$it_data_type
+  )
+  
 
   output$it_plot <- renderPlotly({
     tryCatch({
@@ -527,31 +557,7 @@ output$mp_plot <- renderPlotly({
 
 })
 
-
 ### Group x Time ###
-
-output$gt_plot <- renderPlotly({
-  req(mfa$normalized_long_format, input$gt_metabolite, input$gt_group, input$gt_plot_type)
-  
-  plot_settings$metabolite <- input$gt_metabolite
-  plot_settings$group <- input$gt_group
-  plot_settings$plot_type <- input$gt_plot_type
-
-  plotGroup(mfa$normalized_long_format, mfa$sequence, plot_settings)
-})
-
-output$gt_table <- renderDT({
-  req(mfa$normalized_long_format, input$gt_metabolite, input$gt_group, input$gt_plot_type)
-  
-  plot_settings$metabolite <- input$gt_metabolite
-  plot_settings$group <- input$gt_group
-  plot_settings$plot_type <- input$gt_plot_type
-
-  selectGTtable(mfa$normalized_long_format, mfa$sequence, plot_settings)
-
-})
-
-### Group x Time (2) ###
 output$group_time_plot <- renderPlotly({
   req(mfa$normalized_long_format_ref, mfa$sequence, input$metabolite_time_table, input$time_point, input$plot_type_time)
   
