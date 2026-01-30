@@ -12,7 +12,7 @@
 #'
 #' @return A logical vector indicating which rows of the data should be kept.
 calculate_keep <- function(data, seq, sample_type, cutoff) {
-
+  
   data_sample <- data[seq[, 1] %in% sample_type]
   data_sample[data_sample == 0] <- NA
 
@@ -65,6 +65,7 @@ in_group_filtration <- function(data, sequence, cutoff) {
 #'
 #' @return A data frame containing the filtered data.
 cutoffrm <- function(data, sequence, cutoff, method) {
+
   cutoff <- cutoff / 100
   valid_methods <- c("entire data", "in QC", "in group")
 

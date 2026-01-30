@@ -10,29 +10,101 @@
   #   }
   # })
   
-  observeEvent(input$runDrift, {
-    tryCatch({
-      validate(
-        need(!is.null(rv$activeFile), "No data"),
-        need(!is.null(rv$sequence[[rv$activeFile]]), "No sequence file"),
-        need(!all(is.na(rv$sequence[[rv$activeFile]][, 'order'])), "No order information, upload sequence")
+observeEvent(input$runDrift, {
+  tryCatch({
+    # Check if activeFile is NULL
+    if (is.null(rv$activeFile)) {
+      showNotification("No data - activeFile is NULL", type = "error")
+      return()
+    }
+    
+    # Check if sequence exists
+    if (is.null(rv$sequence[[rv$activeFile]])) {
+      showNotification("No sequence file", type = "error")
+      return()
+    }
+    
+    # Get data and sequence
+    data <- rv$data[[rv$activeFile]]
+    sequence <- rv$sequence[[rv$activeFile]]
+    
+    # Check if data exists
+    if (is.null(data)) {
+      showNotification("No data found for active file", type = "error")
+      return()
+    }
+    
+    # Check for 'order' column
+    if (!"order" %in% colnames(sequence)) {
+      showNotification("No 'order' column in sequence, upload sequence with order information", type = "error")
+      return()
+    }
+    
+    # Check if order column has any non-NA values
+    if (all(is.na(sequence[, 'order']))) {
+      showNotification("No order information (all NA), upload sequence with order values", type = "error")
+      return()
+    }
+    
+    print(paste("Order column non-NA count:", sum(!is.na(sequence[, 'order']))))
+    print(paste("Order column range:", 
+                ifelse(all(is.na(sequence[, 'order'])), "All NA", 
+                       paste(min(sequence[, 'order'], na.rm = TRUE), 
+                             "to", 
+                             max(sequence[, 'order'], na.rm = TRUE)))))
+    
+    # Extract QC data
+    qc_indices <- which(sequence[, 1] %in% "QC")
+    print(paste("Number of QC samples:", length(qc_indices)))
+    
+    if (length(qc_indices) == 0) {
+      showNotification("No QC samples found in sequence", type = "error")
+      return()
+    }
+    
+    dat_qc <- data[, qc_indices, drop = FALSE]
+    print(paste("QC data dimensions:", dim(dat_qc)))
+    
+    # Check if QCs have missing values
+    missing_per_qc <- colSums(is.na(dat_qc))
+    print(paste("Missing values per QC:", paste(missing_per_qc, collapse = ", ")))
+    
+    if (any(missing_per_qc > 0)) {
+      sendSweetAlert(
+        session = session, 
+        title = "Error", 
+        text = "QCs cannot have missing values. Please impute QC data first.", 
+        type = "error"
       )
-      data <- rv$data[[rv$activeFile]]
-      sequence <- rv$sequence[[rv$activeFile]]  
-      dat_qc <- data[, sequence[, 1] %in% "QC"]
-      if(any(colSums(!is.na(dat_qc)) != nrow(dat_qc))) {
-        sendSweetAlert(session = session, title = "Error", text = "QCs cannot have missing values.", type = "error")
-      } else {
-        corrected <- driftCorrection(data, sequence, input$driftMethod, input$driftTrees, input$driftDegree, input$driftQCspan)
-        rv$tmpData <- corrected
-        rv$tmpSequence <- sequence
-        updateSelectInput(session, "selectpca1", selected = "Unsaved data", choices = c("Unsaved data", rv$choices))
-        output$dttable <- renderDataTable(rv$tmpData, rownames = FALSE, options = list(scrollX = TRUE, scrollY = "700px", pageLength = 20))
-      }
-    }, error = function(e) {
-      showNotification(paste("Error in drift correction:", e$message), type = "error")
-    })
+      return()
+    }
+    
+    # Check if any QC columns are all NA
+    if (any(colSums(!is.na(dat_qc)) == 0)) {
+      sendSweetAlert(
+        session = session, 
+        title = "Error", 
+        text = "Some QCs have all missing values.", 
+        type = "error"
+      )
+      return()
+    }
+    
+    corrected <- driftCorrection(data, sequence, input$driftMethod, input$driftTrees, input$driftDegree, input$driftQCspan)
+    
+    rv$tmpData <- corrected
+    rv$tmpSequence <- sequence
+    updateSelectInput(session, "selectpca1", selected = "Unsaved data", choices = c("Unsaved data", rv$choices))
+    output$dttable <- renderDataTable(rv$tmpData, rownames = FALSE, options = list(scrollX = TRUE, scrollY = "700px", pageLength = 20))
+    
+    print("=== DEBUG DRIFT CORRECTION END ===")
+    
+  }, error = function(e) {
+    showNotification(paste("Error in drift correction:", e$message), type = "error")
+    print(paste("Full error:", e))
+    print(traceback())  # This will show the call stack
   })
+})
   
   observeEvent(input$saveDrift, {
     tryCatch({
