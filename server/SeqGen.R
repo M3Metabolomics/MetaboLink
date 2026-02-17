@@ -1,1017 +1,900 @@
 
-# ==============================================================================
-# SERVER: AQ logic
-# ==============================================================================
+###############################
+# Hygge Project – Seq generator
+###############################
 
-# ------------------------------------------------------------------------------
-# UI builder for Absolute Quantification modal
-# ------------------------------------------------------------------------------
-absq_modal_body <- function() {
-  tagList(
-    div(
-      class = "absq-modal-body",
-      
-      # 1. Settings -------------------------------------------------------------
-      div(
-        class = "absq-section",
-        h4("1. Settings"),
-        fluidRow(
-          column(
-            6,
-            radioButtons(
-              "absq_matrix_type", "Sample Matrix",
-              choices  = c("Tissue (mg)", "Biofluid (µL)"),
-              selected = "Tissue (mg)",
-              width    = "100%"
-            )
-          ),
-          column(
-            6,
-            checkboxInput(
-              "absq_include_qc",
-              "Include QC samples in checks",
-              value = TRUE,
-              width = "100%"
-            )
-          )
-        )
-      ),
-      
-      # 2. Readiness checks ----------------------------------------------------
-      div(
-        class = "absq-section",
-        h4("2. Readiness Checks"),
-        uiOutput("absq_readiness_ui")
-      ),
-      
-      # 3. Internal standard spikes -------------------------------------------
-      div(
-        class = "absq-section",
-        h4("3. Internal Standard Spikes"),
-        
-        fluidRow(
-          column(
-            6,
-            selectInput(
-              "absq_spike_unit",
-              "Input Unit",
-              choices  = c("pmol", "nmol"),
-              selected = "pmol",
-              width    = "100%"
-            )
-          ),
-          column(
-            6,
-            div(
-              class = "absq-help-text",
-              "Double-click cells in the table to edit individual amounts."
-            )
-          )
-        ),
-        
-        br(),
-        
-        # Auto-fill panel for spikes
-        wellPanel(
-          style = "padding: 10px; background-color: #fff; border: 1px solid #ddd;",
-          p(
-            style = "font-size: 0.9em; color: #666; margin-bottom: 5px;",
-            tags$i(class = "fa fa-info-circle"),
-            " Psst, if you have the same value for all of 'spiked amount', just auto fill here:"
-          ),
-          fluidRow(
-            column(
-              6,
-              numericInput(
-                "absq_autofill_val",
-                "Auto-fill Amount:",
-                value = 0,
-                step  = 0.1,
-                width = "100%"
-              )
-            ),
-            column(
-              6,
-              style = "margin-top: 25px;",
-              actionButton(
-                "absq_autofill_btn",
-                "Apply to All Rows",
-                icon  = icon("arrow-down"),
-                class = "btn-warning",
-                width = "100%"
-              )
-            )
-          )
-        ),
-        
-        DT::DTOutput("absq_spike_table")
-      ),
-      
-      # 4. Sample Amounts (Updated UI) ----------------------------------
-      div(
-        class = "absq-section",
-        h4("4. Sample Amounts"),
-        p(
-          "Provide the sample mass / volume for each sample. ",
-          "If available, values are pre-filled from the sequence file, ",
-          "but you can override or enter them manually."
-        ),
-        
-        wellPanel(
-          style = "padding: 10px; background-color: #fff; border: 1px solid #ddd;",
-          p(
-            style = "font-size: 0.9em; color: #666; margin-bottom: 5px;",
-            tags$i(class = "fa fa-info-circle"),
-            " Bulk Actions:"
-          ),
-          fluidRow(
-            # --- Existing Auto-fill Input ---
-            column(
-              4,
-              numericInput(
-                "absq_amt_autofill_val",
-                "Auto-fill Value:",
-                value = NA,
-                step  = 0.1,
-                width = "100%"
-              )
-            ),
-            # --- Existing Apply All Button ---
-            column(
-              4,
-              style = "margin-top: 25px;",
-              actionButton(
-                "absq_amt_autofill_btn",
-                "Apply to All",
-                icon  = icon("arrow-down"),
-                class = "btn-info",
-                width = "100%"
-              )
-            ),
-            # --- NEW BUTTON: Impute Average ---
-            column(
-              4, 
-              style = "margin-top: 25px;",
-              tipify(
-                actionButton(
-                  "absq_impute_avg_btn",
-                  "Fill NAs with Avg",
-                  icon  = icon("magic"),
-                  class = "btn-success", # Green button to stand out
-                  width = "100%"
-                ),
-                title = "Calculates average of existing values and fills empty cells only."
-              )
-            )
-          )
-        ),
-        
-        DT::DTOutput("absq_amount_table")
-      ),
-      
-      # 5. Compute & results ---------------------------------------------------
-      div(
-        class = "absq-section",
-        h4("5. Compute & Results"),
-        
-        selectInput(
-          "absq_is_method",
-          "IS Matching Strategy",
-          choices  = c("Nearest RT", "Same lipid structure"),
-          selected = "Nearest RT",
-          width    = "50%"
-        ),
-        
-        bsButton(
-          "absq_compute",
-          "Compute Absolute Quantification",
-          style = "primary",
-          width = "100%"
-        ),
-        
-        tags$hr(),
-        h5("Preview Results"),
-        DT::DTOutput("absq_result_table_modal"),
-        
-        
-        tags$hr(),
-        checkboxInput(
-          "absq_save_as_new",
-          "Save as new dataset",
-          value = TRUE,
-          width = "100%"
-        )
-      )
-    )
-  )
-}
+# Reactive storage for uploaded / edited data
+Data_in <- reactiveVal(NULL)
 
-# ==============================================================================
-# Absolute Quantification (AQ) – SERVER BLOCK
-# ==============================================================================
+#========================================================
+# 1. File upload
+#========================================================
 
-# ---------------------------------
-# Helper functions
-# ---------------------------------
+# Store uploaded CSV in Data_in
+observeEvent(input$dataFile, {
+  df <- read.csv(input$dataFile$datapath, stringsAsFactors = FALSE)
+  Data_in(df)
+})
 
-# Bullet with green check / red cross for readiness UI
-absq_readiness_bullet <- function(ok, txt) {
-  color <- if (ok) "#2e7d32" else "#c62828"
-  icon  <- shiny::icon(if (ok) "check" else "times")
-  
-  shiny::tags$li(
-    style = paste0("color:", color, "; font-weight:600;"),
-    icon,
-    shiny::span(style = "color:black; font-weight:normal; margin-left:4px;", txt)
-  )
-}
+#========================================================
+# 2. Helpers – smart column guessing
+#========================================================
 
-# Find an 'amount' column in sequence table (exact match preferred, then fuzzy)
-absq_find_amount_col <- function(seq_tbl) {
-  exact <- which(tolower(colnames(seq_tbl)) == "amount")
-  if (length(exact) >= 1) return(exact[1])
-  
-  fuzzy <- grep("amount", colnames(seq_tbl), ignore.case = TRUE)
-  if (length(fuzzy) >= 1) return(fuzzy[1])
-  
-  NA_integer_
-}
-
-# Find RT column index, either via sequence labels or data column names
-absq_find_rt_col <- function(seq_tbl, d) {
-  rt_from_seq <- which(seq_tbl[, 1] == "RT")
-  if (length(rt_from_seq)) return(rt_from_seq[1])
-  
-  rt_from_data <- which(colnames(d) == "RT")
-  if (length(rt_from_data)) return(rt_from_data[1])
-  
-  NA_integer_
-}
-
-# Choose IS index for each feature (Nearest RT / Same lipid structure)
-absq_choose_is_index <- function(d, seq_tbl, is_rows,
-                                 method = c("Nearest RT", "Same lipid structure")) {
-  method <- match.arg(method)
-  
-  rt_col_idx   <- absq_find_rt_col(seq_tbl, d)
-  name_rows    <- which(seq_tbl[, 1] == "Name")
-  name_col_idx <- if (length(name_rows)) name_rows[1] else 1
-  
-  n_feat <- nrow(d)
-  
-  # Base mapping: nearest RT
-  if (!is.na(rt_col_idx) && length(is_rows) > 0) {
-    feat_rts <- suppressWarnings(as.numeric(d[, rt_col_idx]))
-    is_rts   <- suppressWarnings(as.numeric(d[is_rows, rt_col_idx]))
-    
-    nearest <- vapply(
-      feat_rts,
-      function(y) {
-        if (is.na(y)) return(1L)
-        which.min(abs(is_rts - y))
-      },
-      integer(1)
-    )
-  } else {
-    nearest <- rep(1L, n_feat) # fallback
+guess_column <- function(cols,
+                         current = NULL,
+                         exact_candidates = character(),
+                         pattern_candidates = character()) {
+  # 1) Keep current selection if still valid
+  if (!is.null(current) && current %in% cols) {
+    return(current)
   }
   
-  if (method == "Nearest RT") return(nearest)
-  
-  # Same lipid structure: match by lipid class prefix
-  feat_names <- as.character(d[, name_col_idx])
-  is_names   <- as.character(d[is_rows, name_col_idx])
-  
-  feat_class <- sub("^([A-Za-z]+).*", "\\1", feat_names)
-  is_class   <- sub("^([A-Za-z]+).*", "\\1", is_names)
-  
-  chosen <- nearest
-  
-  if (!is.na(rt_col_idx) && length(is_rows) > 0) {
-    is_rts   <- suppressWarnings(as.numeric(d[is_rows, rt_col_idx]))
-    feat_rts <- suppressWarnings(as.numeric(d[, rt_col_idx]))
-  }
-  
-  for (i in seq_len(n_feat)) {
-    matches <- which(is_class == feat_class[i])
-    if (length(matches) > 0) {
-      if (!is.na(rt_col_idx)) {
-        current_rt <- feat_rts[i]
-        if (!is.na(current_rt)) {
-          local_rts <- is_rts[matches]
-          best_idx  <- which.min(abs(local_rts - current_rt))
-          chosen[i] <- matches[best_idx]
-        } else {
-          chosen[i] <- matches[1]
-        }
-      } else {
-        chosen[i] <- matches[1]
+  # 2) Try exact candidates (case-insensitive)
+  if (length(exact_candidates)) {
+    for (cand in exact_candidates) {
+      idx <- which(tolower(cols) == tolower(cand))
+      if (length(idx) > 0) {
+        return(cols[idx[1]])
       }
     }
   }
-  chosen
-}
-
-# Sticky footer for modal buttons
-sticky_footer <- function(...) {
-  shiny::tagList(
-    tags$div(
-      ...,
-      style = paste0(
-        "position: fixed;",
-        "bottom: 0;",
-        "left: 0;",
-        "width: 100%;",
-        "padding: 10px 15px;",
-        "border-top: 1px solid #e5e5e5;",
-        "background-color: #f5f5f5;",
-        "z-index: 1050;"
-      )
-    )
-  )
-}
-
-# ------------------------------------------------------------------------------
-# Basic data access reactives
-# ------------------------------------------------------------------------------
-
-absq_data <- reactive({
-  req(rv$activeFile)
-  rv$data[[rv$activeFile]]
-})
-
-absq_seq <- reactive({
-  req(rv$activeFile)
-  rv$sequence[[rv$activeFile]]
-})
-
-# Which sample columns are “in play”
-absq_selected_sample_mask <- reactive({
-  req(absq_seq(), !is.null(input$absq_include_qc))
-  sel_labels <- if (isTRUE(input$absq_include_qc)) c("Sample", "QC") else "Sample"
-  absq_seq()[, 1] %in% sel_labels
-})
-
-# Internal standards (rows + names)
-absq_is_parsed <- reactive({
-  d <- absq_data()
-  is_idx <- grep("\\(IS\\)", d[, 1], ignore.case = TRUE)
-  if (length(is_idx) == 0) return(NULL)
   
-  data.frame(
-    IS_row  = is_idx,
-    IS_name = d[is_idx, 1],
-    stringsAsFactors = FALSE
-  )
-})
+  # 3) Try regex / partial matches
+  if (length(pattern_candidates)) {
+    for (pat in pattern_candidates) {
+      hits <- grep(pat, cols, ignore.case = TRUE)
+      if (length(hits) > 0) {
+        return(cols[hits[1]])
+      }
+    }
+  }
+  
+  # 4) Fallback: just use the first column
+  cols[1]
+}
 
-# ------------------------------------------------------------------------------
-# State objects
-# ------------------------------------------------------------------------------
+#========================================================
+# 3. Column mapping dropdowns (name / position / type)
+#========================================================
 
-
-# ------------------------------------------------------------------------------
-# Auto-Initialization Logic (FIXED)
-# ------------------------------------------------------------------------------
-# ------------------------------------------------------------------------------
-# Auto-Initialization Logic (FIXED)
-# ------------------------------------------------------------------------------
-
-# This observer ensures rv$absq_amounts is ALWAYS populated correctly 
-# whenever the modal is open or sample selection changes.
 observe({
-  req(absq_data(), absq_seq(), absq_selected_sample_mask())
+  df <- Data_in()
+  if (is.null(df)) return()
   
-  d   <- absq_data()
-  seq <- absq_seq()
+  cols <- names(df)
   
-  mask        <- absq_selected_sample_mask()
-  sample_cols <- which(mask)
-  if (!length(sample_cols)) return()
+  # Keep current selections if possible
+  current_name <- isolate(input$col_name_col)
+  current_pos  <- isolate(input$col_position_col)
+  current_type <- isolate(input$col_sampletype_col)
   
-  sample_ids <- colnames(d)[sample_cols]
-  
-  # 1. Check if the Sequence File actually has valid data
-  seq_has_data <- FALSE
-  amt_col_idx  <- absq_find_amount_col(seq)
-  if (!is.na(amt_col_idx)) {
-    # Check if there are non-NA values for the selected samples
-    seq_vals <- suppressWarnings(as.numeric(seq[sample_ids, amt_col_idx]))
-    if (any(!is.na(seq_vals))) seq_has_data <- TRUE
-  }
-  
-  # 2. Check current internal table state
-  # === THE FIX IS BELOW ===
-  # We use isolate() so this observer does NOT trigger when the user edits the table
-  curr <- isolate(rv$absq_amounts) 
-  # ========================
-  
-  internal_has_nas <- FALSE
-  if (!is.null(curr)) {
-    if (any(is.na(curr$Amount))) internal_has_nas <- TRUE
-  }
-  
-  # 3. Decision: Should we rebuild the internal table?
-  rebuild <- FALSE
-  if (is.null(curr)) {
-    # Case A: Table doesn't exist yet -> Rebuild
-    rebuild <- TRUE
-  } else if (!identical(curr$Sample, sample_ids)) {
-    # Case B: Samples selected have changed -> Rebuild
-    rebuild <- TRUE
-  } else if (internal_has_nas && seq_has_data) {
-    # Case C: Internal table has NAs, but Sequence file HAS data.
-    # This forces a sync to pull the values from the sequence file.
-    rebuild <- TRUE
-  }
-  
-  if (rebuild) {
-    amt <- rep(NA_real_, length(sample_ids))
-    if (!is.na(amt_col_idx)) {
-      vals <- suppressWarnings(as.numeric(seq[sample_ids, amt_col_idx]))
-      amt  <- vals
-    }
-    
-    rv$absq_amounts <- data.frame(
-      Sample = sample_ids,
-      Amount = amt,
-      stringsAsFactors = FALSE
-    )
-  }
-})
-
-# Check if sequence file has valid amounts (Status check)
-absq_amounts_ready <- reactive({
-  req(absq_seq())
-  seq <- absq_seq()
-  has_amt_col <- "amount" %in% tolower(colnames(seq))
-  if (!has_amt_col) return(FALSE)
-  
-  # Are there any non-NA values?
-  amt_col <- absq_find_amount_col(seq)
-  if (is.na(amt_col)) return(FALSE)
-  
-  # Check if at least one selected sample has a value
-  mask <- tryCatch(absq_selected_sample_mask(), error = function(e) TRUE)
-  if (is.logical(mask) && length(mask) == nrow(seq)) {
-    # Use only selected samples for validity check
-    vals <- seq[mask, amt_col]
-  } else {
-    vals <- seq[, amt_col]
-  }
-  
-  any(!is.na(suppressWarnings(as.numeric(vals))))
-})
-
-# ------------------------------------------------------------------------------
-# Open modal
-# ------------------------------------------------------------------------------
-
-observeEvent(input$absq_open_modal, {
-  # Open modal immediately
-  showModal(
-    modalDialog(
-      title  = "Absolute Quantification",
-      size   = "l",
-      footer = sticky_footer(
-        modalButton("Close window"),
-        bsButton("absq_save", "Save & Apply",
-                 style = "success", icon = icon("save"))
-      ),
-      absq_modal_body()
-    )
+  # NAME column: typical name / sample name patterns
+  guess_name <- guess_column(
+    cols,
+    current = current_name,
+    exact_candidates = c("name", "Name", "sample_name", "Sample.Name", "Sample ID"),
+    pattern_candidates = c("name", "sample.?id", "sample.?name")
   )
   
-  # Reset result state
-  rv$absq_result <- NULL
-  shinyjs::disable("absq_save")
-})
-
-# ------------------------------------------------------------------------------
-# Readiness checks (depends on matrix type)
-# ------------------------------------------------------------------------------
-
-output$absq_readiness_ui <- renderUI({
-  req(input$absq_matrix_type, absq_seq(), absq_data())
-  
-  seq     <- absq_seq()
-  d       <- absq_data()
-  is_info <- absq_is_parsed()
-  
-  has_amt_col <- "amount" %in% tolower(colnames(seq))
-  
-  # Check 1: Sequence has amounts?
-  amt_seq_ok <- absq_amounts_ready()
-  
-  # Check 2: Manual input has amounts?
-  amt_manual_ok <- !is.null(rv$absq_amounts) &&
-    any(!is.na(suppressWarnings(as.numeric(rv$absq_amounts$Amount))))
-  
-  # Combined check
-  amt_any_ok <- amt_seq_ok || amt_manual_ok
-  
-  has_is  <- !is.null(is_info) && nrow(is_info) > 0
-  n_is    <- if (is.null(is_info)) 0 else nrow(is_info)
-  
-  has_rt  <- "RT" %in% seq[, 1] || "RT" %in% colnames(d)
-  
-  is_bio   <- grepl("Biofluid", input$absq_matrix_type, ignore.case = TRUE)
-  unit_txt <- if (is_bio) "volume in µL" else "mass in mg"
-  
-  tags$ul(
-    absq_readiness_bullet(
-      has_amt_col,
-      paste0("Sequence contains 'amount' column (", unit_txt, ")")
-    ),
-    absq_readiness_bullet(
-      amt_any_ok,
-      "Sample amounts available (from sequence or manual input)"
-    ),
-    absq_readiness_bullet(
-      has_is,
-      paste0("Internal Standards detected (", n_is, " found)")
-    ),
-    absq_readiness_bullet(
-      has_rt,
-      "Retention Time (RT) available"
-    )
+  # POSITION / VIAL column
+  guess_pos <- guess_column(
+    cols,
+    current = current_pos,
+    exact_candidates = c("Position", "Vial", "Well", "WellID"),
+    pattern_candidates = c("position", "vial", "well", "plate.*pos")
   )
+  
+  # SAMPLE TYPE column
+  guess_type <- guess_column(
+    cols,
+    current = current_type,
+    exact_candidates = c("Sample.type", "SampleType", "Type", "Sample_Type"),
+    pattern_candidates = c("sample.?type", "^type$", "class", "group")
+  )
+  
+  updateSelectInput(
+    session, "col_name_col",
+    choices = cols,
+    selected = guess_name
+  )
+  updateSelectInput(
+    session, "col_position_col",
+    choices = cols,
+    selected = guess_pos
+  )
+  updateSelectInput(
+    session, "col_sampletype_col",
+    choices = cols,
+    selected = guess_type
+  )
+  updateSelectInput(session, "col_remove_select", choices = cols)
 })
 
-# ------------------------------------------------------------------------------
-# Dynamic UI: Manual Sample Amounts
-# ------------------------------------------------------------------------------
+#========================================================
+# 4. Overview of sample types
+#========================================================
 
-output$absq_manual_amounts_ui <- renderUI({
-  # Only show this section if readiness check for amounts is NEGATIVE
-  # (i.e. sequence doesn't have amounts)
-  ready <- absq_amounts_ready()
-  if (isTRUE(ready)) return(NULL) # Hide if we have amounts
+output$hygge_overview <- renderUI({
+  df <- Data_in()
   
-  div(
-    class = "absq-section",
-    h4("Missing Sample Amounts"),
-    p(
-      "The sequence file does not contain sample amounts. ",
-      "Please enter the sample mass / volume manually below."
-    ),
-    
-    wellPanel(
-      style = "padding: 10px; background-color: #fff; border: 1px solid #ddd;",
-      p(
-        style = "font-size: 0.9em; color: #666; margin-bottom: 5px;",
-        tags$i(class = "fa fa-info-circle"),
-        " If all samples use the same amount, you can auto-fill that value here:"
-      ),
-      fluidRow(
-        column(
-          6,
-          numericInput(
-            "absq_amt_autofill_val",
-            "Auto-fill Spiked Amount:",
-            value = NA,
-            step  = 0.1,
-            width = "100%"
-          )
-        ),
-        column(
-          6,
-          style = "margin-top: 25px;",
-          actionButton(
-            "absq_amt_autofill_btn",
-            "Apply to All Samples",
-            icon  = icon("arrow-down"),
-            class = "btn-info",
-            width = "100%"
-          )
+  # No file loaded
+  if (is.null(df)) {
+    return(
+      div(
+        class = "hygge-subtle",
+        "No file loaded yet. Upload a CSV to see an overview."
+      )
+    )
+  }
+  
+  stype_col <- input$col_sampletype_col
+  
+  # Sample type column not set or invalid
+  if (is.null(stype_col) || !stype_col %in% names(df)) {
+    return(
+      div(
+        p(strong("Sample type column not set.")),
+        p(
+          class = "hygge-subtle",
+          "Select the column containing Sample / Blank / QC in the dropdown under 'Step 1'."
         )
       )
+    )
+  }
+  
+  stype <- df[[stype_col]]
+  
+  # Counts
+  n_total  <- nrow(df)
+  n_blank  <- sum(tolower(stype) == "blank",  na.rm = TRUE)
+  n_qc     <- sum(tolower(stype) == "qc",     na.rm = TRUE)
+  n_sample <- sum(tolower(stype) == "sample", na.rm = TRUE)
+  
+  # Unknown / missing types
+  recognized  <- tolower(stype) %in% c("blank", "qc", "sample")
+  unknown_idx <- which(is.na(stype) | stype == "" | !recognized)
+  n_unknown   <- length(unknown_idx)
+  
+  tagList(
+    p(strong("Overview of loaded data")),
+    tags$ul(
+      tags$li(paste("Total rows:", n_total)),
+      tags$li(paste("Samples:", n_sample)),
+      tags$li(paste("Blanks:", n_blank)),
+      tags$li(paste("QCs:", n_qc)),
+      tags$li(paste("Rows with unknown / missing type:", n_unknown))
     ),
-    
-    DT::DTOutput("absq_amount_table")
+    if (n_unknown > 0) {
+      div(
+        p(strong("Rows with unknown type:")),
+        p(
+          paste(head(unknown_idx, 20), collapse = ", "),
+          if (n_unknown > 20) " ..." else ""
+        ),
+        p(
+          class = "hygge-subtle",
+          "These are row indices in the uploaded table where the selected type column is not 'Sample', 'Blank' or 'QC'."
+        )
+      )
+    } else {
+      div(
+        class = "hygge-subtle",
+        "All rows have a recognized type (Sample, Blank or QC)."
+      )
+    }
   )
 })
 
+#========================================================
+# 5. Uploaded data table + editing
+#========================================================
 
-# ------------------------------------------------------------------
-# NEW: Impute missing (NA) amounts with the average of existing ones
-# ------------------------------------------------------------------
-
-observeEvent(input$absq_impute_avg_btn, {
-  req(rv$absq_amounts)
-  
-  # 1. Get current values
-  df <- rv$absq_amounts
-  vals <- suppressWarnings(as.numeric(df$Amount))
-  
-  # 2. Check if we have enough data to calculate an average
-  valid_vals <- vals[!is.na(vals)]
-  
-  if (length(valid_vals) == 0) {
-    showNotification("Cannot calculate average: No valid amounts entered yet.", type = "warning")
-    return()
-  }
-  
-  # 3. Identify missing indices
-  missing_idx <- which(is.na(vals))
-  
-  if (length(missing_idx) == 0) {
-    showNotification("No missing values (NA) found to fill.", type = "message")
-    return()
-  }
-  
-  # 4. Calculate Average and rounded
-  avg_val <- mean(valid_vals)
-  avg_display <- round(avg_val, 2)
-  
-  # 5. Update only the missing rows
-  df$Amount[missing_idx] <- avg_display
-  rv$absq_amounts <- df
-  
-  # 6. Success message
-  msg <- paste0("Filled ", length(missing_idx), " missing samples with average (", avg_display, ")")
-  
-  # FIXED: Changed type="success" to type="message" to avoid crash
-  showNotification(msg, type = "message", duration = 4) 
+output$uploadedTable <- DT::renderDT({
+  req(Data_in())
+  DT::datatable(
+    Data_in(),
+    editable  = TRUE,          # user can edit cells directly
+    selection = "multiple",    # for row deletion
+    options   = list(pageLength = 100),
+    caption   = "Unprocessed data"
+  )
 })
 
-# ------------------------------------------------------------------------------
-# Spike tables per matrix type
-# ------------------------------------------------------------------------------
-
-absq_ensure_spike_table <- function() {
-  info <- absq_is_parsed()
-  key  <- isolate(input$absq_matrix_type)
-  if (is.null(info) || is.null(key)) return()
+# Apply cell edits from DT
+observeEvent(input$uploadedTable_cell_edit, {
+  df   <- Data_in()
+  info <- input$uploadedTable_cell_edit
+  i <- info$row
+  j <- info$col
+  v <- info$value
   
-  if (is.null(rv$absq_spikes[[key]])) {
-    base_df <- data.frame(
-      IS_row     = info$IS_row,
-      IS_name    = info$IS_name,
-      spike_pmol = 0,
-      stringsAsFactors = FALSE
-    )
-    
-    # copy from other matrix type if available
-    other_keys <- setdiff(c("Tissue (mg)", "Biofluid (µL)"), key)
-    donor <- NULL
-    for (ok in other_keys) {
-      if (!is.null(rv$absq_spikes[[ok]])) {
-        donor <- rv$absq_spikes[[ok]]
-        break
-      }
-    }
-    if (!is.null(donor)) {
-      merged <- merge(
-        base_df,
-        donor[, c("IS_row", "spike_pmol")],
-        by = "IS_row", all.x = TRUE, suffixes = c("", ".donor")
-      )
-      base_df$spike_pmol <- ifelse(
-        is.na(merged$spike_pmol.donor),
-        base_df$spike_pmol,
-        merged$spike_pmol.donor
-      )
-    }
-    
-    base_df <- base_df[order(base_df$IS_row), ]
-    rv$absq_spikes[[key]] <- base_df
-  }
-}
-
-observeEvent(list(absq_is_parsed(), input$absq_matrix_type), {
-  req(absq_is_parsed(), input$absq_matrix_type)
-  absq_ensure_spike_table()
+  df[i, j] <- DT::coerceValue(v, df[i, j])  # keep column type
+  Data_in(df)
 })
 
-absq_spike_display <- reactive({
-  req(absq_seq(), absq_data(), absq_is_parsed(), input$absq_matrix_type)
-  
-  key <- input$absq_matrix_type
-  absq_ensure_spike_table()
-  df <- rv$absq_spikes[[key]]
+# Delete selected rows
+observeEvent(input$delete_rows, {
+  df <- Data_in()
   req(df)
   
-  seq_tbl <- absq_seq()
-  d       <- absq_data()
+  s <- input$uploadedTable_rows_selected
+  if (length(s) > 0) {
+    df <- df[-s, , drop = FALSE]
+    Data_in(df)
+  }
+})
+
+# Add a completely empty row at the bottom
+observeEvent(input$add_empty_row, {
+  df <- Data_in()
+  req(df)
   
-  rt_col_idx <- which(seq_tbl[, 1] == "RT")[1]
-  if (is.na(rt_col_idx)) rt_col_idx <- which(colnames(d) == "RT")[1]
+  # Create a one-row data.frame with the same columns and NA values
+  new_row <- as.data.frame(
+    lapply(df, function(col) {
+      if (is.factor(col)) {
+        factor(NA, levels = levels(col))
+      } else {
+        NA
+      }
+    }),
+    stringsAsFactors = FALSE
+  )
   
-  rt_vals <- if (!is.na(rt_col_idx)) {
-    round(as.numeric(d[df$IS_row, rt_col_idx]), 2)
-  } else {
-    rep(NA_real_, nrow(df))
+  df2 <- rbind(df, new_row)
+  Data_in(df2)
+})
+
+# Duplicate selected rows and append them at the bottom
+observeEvent(input$dup_rows_btn, {
+  df <- Data_in()
+  req(df)
+  
+  s <- input$uploadedTable_rows_selected
+  if (length(s) == 0) {
+    showNotification(
+      "Select at least one row in 'Uploaded data' before duplicating.",
+      type = "error"
+    )
+    return()
   }
   
-  unit_scale <- if (identical(input$absq_spike_unit, "nmol")) 1/1000 else 1
-  col_name   <- paste0("Spiked Amount (", input$absq_spike_unit, ")")
+  df2 <- rbind(df, df[s, , drop = FALSE])
+  Data_in(df2)
+})
+
+
+#========================================================
+# 6. Column add / remove tools
+#========================================================
+
+# Add new column and auto-fill it
+observeEvent(input$add_new_col_btn, {
+  df <- Data_in()
+  req(df)
+  
+  new_name <- input$new_col_name
+  new_val  <- input$new_col_val
+  
+  if (is.null(new_name) || new_name == "") {
+    showNotification("Please enter a name for the new column.", type = "error")
+    return()
+  }
+  
+  df[[new_name]] <- new_val
+  Data_in(df)
+  
+  updateTextInput(session, "new_col_name", value = "")
+  updateTextInput(session, "new_col_val", value = "")
+  showNotification(paste("Added column:", new_name), type = "message")
+})
+
+# Remove selected column
+observeEvent(input$remove_col_btn, {
+  df <- Data_in()
+  req(df)
+  
+  col_to_remove <- input$col_remove_select
+  req(col_to_remove)
+  
+  if (col_to_remove %in% names(df)) {
+    df[[col_to_remove]] <- NULL
+    Data_in(df)
+    showNotification(paste("Removed column:", col_to_remove), type = "message")
+  }
+})
+
+
+
+#========================================================
+# 7. Sequence generation (data_processed)
+#========================================================
+
+data_processed <- eventReactive(input$process, {
+  df <- Data_in()
+  req(df)
+  
+  # Column mapping
+  name_col  <- input$col_name_col
+  pos_col   <- input$col_position_col
+  stype_col <- input$col_sampletype_col
+  req(name_col, pos_col, stype_col)
+  
+  if (!all(c(name_col, pos_col, stype_col) %in% names(df))) {
+    stop("Selected columns for name/position/type are not found in the data.")
+  }
+  
+  stype <- df[[stype_col]]
+  
+  # User parameters
+  num_eqQCs            <- input$num_eqQCs
+  num_MSMSs            <- input$num_MSMSs
+  num_QCs              <- input$num_QCs
+  insert_after_samples <- input$insert_after_samples
+  
+  # Split data into subsets (by selected sample-type column)
+  blanks  <- df[tolower(stype) == "blank",  , drop = FALSE]
+  qcs     <- df[tolower(stype) == "qc",     , drop = FALSE]
+  samples <- df[tolower(stype) == "sample", , drop = FALSE]
+  
+  if (nrow(qcs) == 0) {
+    stop("No QC samples available to duplicate.")
+  }
+  
+  existing_qcs <- qcs
+  
+  # Base name templates for generated rows
+  # eqQC and MSMS keep their specific tags
+  sample_type_eqQC_names <- paste0(existing_qcs[[name_col]], "_eq_QC")
+  sample_type_MSMS_names <- paste0(existing_qcs[[name_col]], "_MSMS")
+  
+  # --- FIX APPLIED HERE ---
+  # Removed paste0(..., "_QC") so it doesn't double up (e.g. avoid RPposQC_QC05)
+  # It now uses the name exactly as it appears in the QC row
+  new_QC_names_base      <- existing_qcs[[name_col]]
+  new_QC_samples_names   <- existing_qcs[[name_col]]
+  # ------------------------
+  
+  #----- Generate eqQCs -----
+  if (num_eqQCs > 0) {
+    new_eqQCs <- qcs[rep(1, num_eqQCs), , drop = FALSE]
+    new_eqQC_names <- paste(
+      sample_type_eqQC_names,
+      sprintf("%02d", seq_len(num_eqQCs)),
+      sep = ""
+    )
+    new_eqQCs[[name_col]] <- new_eqQC_names
+  } else {
+    new_eqQCs <- qcs[0, , drop = FALSE]
+  }
+  
+  #----- Generate MSMS -----
+  if (num_MSMSs > 0) {
+    new_MSMSs <- qcs[rep(1, num_MSMSs), , drop = FALSE]
+    new_MSMS_names <- paste(
+      sample_type_MSMS_names,
+      sprintf("%02d", seq_len(num_MSMSs)),
+      sep = ""
+    )
+    new_MSMSs[[name_col]] <- new_MSMS_names
+  } else {
+    new_MSMSs <- qcs[0, , drop = FALSE]
+  }
+  
+  #----- Generate QCs before samples -----
+  if (num_QCs > 0) {
+    new_QCs <- qcs[rep(1, num_QCs), , drop = FALSE]
+    new_QC_names <- paste(
+      new_QC_names_base,
+      sprintf("%02d", seq_len(num_QCs)),
+      sep = ""
+    )
+    new_QCs[[name_col]] <- new_QC_names
+  } else {
+    new_QCs <- qcs[0, , drop = FALSE]
+  }
+  
+  # Combine only the QC blocks that have rows
+  pieces    <- list(new_eqQCs, new_MSMSs, new_QCs)
+  non_empty <- pieces[sapply(pieces, nrow) > 0]
+  if (length(non_empty) > 0) {
+    qcs_combined <- do.call(rbind, non_empty)
+  } else {
+    qcs_combined <- qcs[0, , drop = FALSE]
+  }
+  
+  #----- Randomize samples and intersperse QCs -----
+  samples_randomized <- samples[sample(nrow(samples)), , drop = FALSE]
+  
+  # Skeleton with the same columns as df
+  samples_with_qcs <- df[0, , drop = FALSE]
+  qc_counter <- num_QCs + 1
+  
+  for (i in seq_len(nrow(samples_randomized))) {
+    # Add one sample row
+    samples_with_qcs <- rbind(
+      samples_with_qcs,
+      samples_randomized[i, , drop = FALSE]
+    )
+    
+    # After every N samples, add a QC row
+    if (insert_after_samples > 0 &&
+        i %% insert_after_samples == 0) {
+      
+      qc_row <- qcs[1, , drop = FALSE]   # clone structure of a QC row
+      qc_row[[name_col]]  <- paste(
+        new_QC_samples_names,
+        sprintf("%02d", qc_counter),
+        sep = ""
+      )
+      qc_row[[stype_col]] <- "QC"
+      
+      samples_with_qcs <- rbind(samples_with_qcs, qc_row)
+      qc_counter <- qc_counter + 1
+    }
+  }
+  
+  # Final combined dataset: blanks, generated QCs, and sample/QC block
+  Data_out <- rbind(blanks, qcs_combined, samples_with_qcs)
+  
+  #----- Optional: force sequence to end with a QC -----
+  if (isTRUE(input$end_with_qc)) {
+    if (nrow(Data_out) > 0) {
+      last_type <- Data_out[[stype_col]][nrow(Data_out)]
+      if (is.na(last_type) || tolower(last_type) != "qc") {
+        qc_row <- qcs[1, , drop = FALSE]
+        qc_row[[name_col]]  <- paste(
+          new_QC_samples_names,
+          sprintf("%02d", qc_counter),
+          sep = ""
+        )
+        qc_row[[stype_col]] <- "QC"
+        Data_out <- rbind(Data_out, qc_row)
+      }
+    }
+  }
+  # --- FIX: Reset weird row numbers (25.1, 25.2, etc.) to clean 1, 2, 3... ---
+  rownames(Data_out) <- NULL
+  
+  
+  Data_out
+})  
+# When processing is done, switch to the "Processed sequence" tab
+observeEvent(input$process, {
+  updateTabsetPanel(session, "hygge_tabs", selected = "Processed sequence")
+})
+
+#========================================================
+# 8. Processed sequence table
+#========================================================
+
+output$table <- DT::renderDT({
+  req(data_processed())
+  DT::datatable(
+    data_processed(),
+    options = list(pageLength = 100),
+    caption = "Data after processing"
+  )
+})
+
+#========================================================
+# 9. Bruker-format export (matches your Excel template)
+#========================================================
+
+brunker_data <- reactive({
+  req(data_processed())
+  data <- data_processed()
+  
+  name_col <- input$col_name_col
+  pos_col  <- input$col_position_col
+  req(name_col, pos_col)
+  
+  if (!all(c(name_col, pos_col) %in% names(data))) {
+    stop("Selected name/position columns are not present in processed data.")
+  }
+  
+  # Default values taken from your Bruker_format.xlsx
+  sep_default       <- "D:\\Methods\\Users\\JH\\pro methods\\JH\\LC methods\\vanquish_lipid11.5min.m?HyStar_LC"
+  ms_default        <- "D:\\Methods\\Users\\JH\\HT\\final\\Lipidomics\\Lipidomics_pos_1pasef_msmsStep_30ev_k0range_large.m?OtofImpacTEMControl"
+  data_path_default <- "D:\\Data\\JH\\LPF"
   
   out <- data.frame(
-    `IS row`  = df$IS_row,
-    `IS name` = df$IS_name,
-    `RT`      = rt_vals,
-    check.names = FALSE
+    Vial                = data[[pos_col]],
+    `Sample ID`         = data[[name_col]],
+    `Method Set`        = NA_character_,
+    `Separation Method` = sep_default,
+    `Injection Method`  = NA_character_,
+    `MS Method`         = ms_default,
+    `Volume [µl]`       = 0.1,
+    `Data Path`         = data_path_default,
+    check.names         = FALSE,
+    stringsAsFactors    = FALSE
   )
-  out[[col_name]] <- round(df$spike_pmol * unit_scale, 6)
+  
   out
 })
 
-# When matrix type or spike unit changes, clear results + disable save
-observeEvent(list(input$absq_matrix_type, input$absq_spike_unit), {
-  rv$absq_result <- NULL
-  shinyjs::disable("absq_save")
+#========================================================
+# 10. Reset / clear data
+#========================================================
+
+observeEvent(input$reset_all, {
+  Data_in(NULL)
+  
+  # Reset dropdowns to empty
+  updateSelectInput(session, "col_name_col",       choices = character(0))
+  updateSelectInput(session, "col_position_col",   choices = character(0))
+  updateSelectInput(session, "col_sampletype_col", choices = character(0))
+  updateSelectInput(session, "col_remove_select",  choices = character(0))
+  
+  updateTabsetPanel(session, "hygge_tabs", selected = "Uploaded data")
+  showNotification("Data reset.", type = "warning")
 })
 
-# Auto-switch spike input unit based on matrix type
-observeEvent(input$absq_matrix_type, {
-  req(input$absq_matrix_type)
-  if (grepl("Biofluid", input$absq_matrix_type)) {
-    updateSelectInput(session, "absq_spike_unit", selected = "pmol")
-  } else {
-    updateSelectInput(session, "absq_spike_unit", selected = "nmol")
+#========================================================
+# 11. Download handlers
+#========================================================
+
+# Processed sequence as CSV
+output$downloadData <- downloadHandler(
+  filename = function() {
+    paste("data-output-", Sys.Date(), ".csv", sep = "")
+  },
+  content = function(file) {
+    req(data_processed())
+    write.csv(data_processed(), file, row.names = FALSE)
   }
+)
+
+# Bruker-format as XLSX
+output$downloadData_bruker <- downloadHandler(
+  filename = function() {
+    paste("data-output-", Sys.Date(), ".xlsx", sep = "")
+  },
+  content = function(file) {
+    req(brunker_data())
+    openxlsx::write.xlsx(brunker_data(), file, rowNames = FALSE)
+  }
+)
+
+#========================================================
+# 12. Open modal from main UI button
+#========================================================
+
+observeEvent(input$hygge_open, {
+  showModal(hygge_modal())
 })
 
-# Auto-fill spike amounts
-observeEvent(input$absq_autofill_btn, {
-  req(input$absq_matrix_type)
-  key <- input$absq_matrix_type
-  absq_ensure_spike_table()
-  req(rv$absq_spikes[[key]])
+
+#========================================================
+# 14. Step 6 - Final Statistics & Runtime
+#========================================================
+
+output$final_stats_ui <- renderUI({
+  # 1. Get the processed data safely
+  df <- tryCatch(data_processed(), error = function(e) NULL)
   
-  val <- input$absq_autofill_val
-  if (is.na(val)) {
-    showNotification("Please enter a valid numeric amount.", type = "warning")
-    return()
+  # 2. If data hasn't been processed yet, show a polite message
+  if (is.null(df)) {
+    return(
+      div(
+        class = "hygge-subtle",
+        style = "margin-top: 10px;",
+        "Please run 'Process data' (Step 5) to see the final statistics."
+      )
+    )
   }
   
-  unit_scale <- if (identical(input$absq_spike_unit, "nmol")) 1000 else 1
-  fill_pmol  <- val * unit_scale
+  # 3. Get the column name used for Sample Type
+  stype_col <- input$col_sampletype_col
   
-  rv$absq_spikes[[key]]$spike_pmol <- fill_pmol
-  showNotification("All spike amounts updated for this matrix type.", type = "message")
-})
-
-output$absq_spike_table <- DT::renderDT({
-  req(absq_spike_display())
-  DT::datatable(
-    absq_spike_display(),
-    editable = list(
-      target  = "cell",
-      disable = list(columns = 0:2)
-    ),
-    options   = list(pageLength = 10, dom = "t", scrollX = FALSE),
-    selection = "none",
-    rownames  = FALSE
-  )
-})
-
-observeEvent(input$absq_spike_table_cell_edit, {
-  info <- input$absq_spike_table_cell_edit
-  req(info, input$absq_matrix_type)
+  # Validation: Ensure column exists
+  if (is.null(stype_col) || !stype_col %in% names(df)) {
+    return(div(class = "text-danger", "Error: Sample type column missing in processed data."))
+  }
   
-  key <- input$absq_matrix_type
-  absq_ensure_spike_table()
-  req(rv$absq_spikes[[key]])
+  # 4. Calculate Counts for the PROCESSED data
+  stypes   <- tolower(df[[stype_col]])
+  n_total  <- nrow(df)
+  n_sample <- sum(stypes == "sample", na.rm = TRUE)
+  n_blank  <- sum(stypes == "blank",  na.rm = TRUE)
+  # Note: Generated eqQCs and MSMSs are usually labeled "QC" in the type column 
+  # based on the generator logic, so this captures all QCs.
+  n_qc     <- sum(stypes == "qc",     na.rm = TRUE)
   
-  val <- suppressWarnings(as.numeric(info$value))
-  if (is.na(val)) return()
+  # 5. Calculate Runtime
+  t_min <- input$method_duration
+  if (is.na(t_min) || t_min < 0) t_min <- 0
   
-  unit_scale <- if (identical(input$absq_spike_unit, "nmol")) 1000 else 1
+  total_minutes <- n_total * t_min
   
-  disp    <- absq_spike_display()
-  is_row  <- disp[info$row, "IS row"]
-  idx_spk <- match(is_row, rv$absq_spikes[[key]]$IS_row)
-  if (is.na(idx_spk)) return()
+  # Time formatting
+  days    <- floor(total_minutes / (24 * 60))
+  rem_min <- total_minutes %% (24 * 60)
+  hours   <- floor(rem_min / 60)
+  minutes <- round(rem_min %% 60)
   
-  rv$absq_spikes[[key]]$spike_pmol[idx_spk] <- val * unit_scale
-})
-
-# ------------------------------------------------------------------------------
-# Sample amounts table (manual / fallback)
-# ------------------------------------------------------------------------------
-
-absq_amount_display <- reactive({
-  # NOTE: We use req(rv$absq_amounts) here.
-  # Since we added the observer to auto-init rv$absq_amounts, this should now be safe.
-  req(rv$absq_amounts, input$absq_matrix_type)
+  time_str <- paste0(hours, "h ", minutes, "m")
+  if (days > 0) {
+    time_str <- paste0(days, "d ", time_str)
+  }
   
-  df <- rv$absq_amounts
-  
-  is_bio   <- grepl("Biofluid", input$absq_matrix_type, ignore.case = TRUE)
-  unit_den <- if (is_bio) "\u00B5L" else "mg"
-  
-  df$Unit <- unit_den
-  df
-})
-
-output$absq_amount_table <- DT::renderDT({
-  req(absq_amount_display())
-  
-  DT::datatable(
-    absq_amount_display(),
-    editable = list(
-      target  = "cell",
-      disable = list(columns = c(0, 2))  # Sample + Unit read-only
-    ),
-    selection = "none",
-    rownames  = FALSE,
-    options   = list(
-      dom            = "t",      # Only show table (no search box/info text)
-      scrollY        = "400px",  # <--- Fixes height & enables vertical scrolling
-      scrollCollapse = TRUE,     # <--- Nice formatting if list is short
-      paging         = FALSE     # <--- Disables pagination (shows ALL rows)
+  # 6. Render the List
+  tagList(
+    div(
+      style = "margin-top: 15px;",
+      
+      # Section A: Sequence Composition
+      p(strong("Generated Sequence Stats:")),
+      tags$ul(
+        tags$li(paste("Total rows:", n_total)),
+        tags$li(paste("Samples:", n_sample)),
+        tags$li(paste("Blanks:", n_blank)),
+        tags$li(paste("Total QCs:", n_qc)),
+        tags$small(class="hygge-subtle", "(Includes eqQC, MSMS, and standard QCs)")
+      ),
+      
+      tags$hr(),
+      
+      # Section B: Runtime
+      p(strong("Estimated Runtime:")),
+      tags$ul(
+        tags$li(
+          span("Total Time: ", style="color: #555;"),
+          strong(time_str, style = "color: #2c3e50; font-size: 1.1em;")
+        )
+      )
     )
   )
 })
 
-observeEvent(input$absq_amt_autofill_btn, {
-  req(rv$absq_amounts)
-  
-  val <- input$absq_amt_autofill_val
-  if (is.null(val) || is.na(val)) {
-    showNotification("Please enter a valid amount to auto-fill.", type = "warning")
-    return()
-  }
-  
-  rv$absq_amounts$Amount <- as.numeric(val)
-})
+#========================================================
+# 13. Modal UI definition
+#========================================================
 
-observeEvent(input$absq_amount_table_cell_edit, {
-  info <- input$absq_amount_table_cell_edit
-  req(info, rv$absq_amounts)
-  
-  row   <- info$row
-  value <- suppressWarnings(as.numeric(info$value))
-  if (is.na(value)) return()
-  
-  rv$absq_amounts$Amount[row] <- value
-})
-
-# ------------------------------------------------------------------------------
-# Compute absolute amounts
-# ------------------------------------------------------------------------------
-
-observeEvent(input$absq_compute, {
-  req(input$absq_matrix_type, absq_seq(), absq_data(), absq_is_parsed())
-  
-  key <- input$absq_matrix_type
-  absq_ensure_spike_table()
-  spikes <- rv$absq_spikes[[key]]
-  req(spikes)
-  
-  d   <- absq_data()
-  seq <- absq_seq()
-  
-  # 1) sample columns
-  mask        <- absq_selected_sample_mask()
-  sample_cols <- which(mask)
-  req(length(sample_cols) > 0)
-  sample_ids  <- colnames(d)[sample_cols]
-  
-  # 2) amounts from manual/auto-filled table
-  # NOTE: Even if the manual table is hidden, rv$absq_amounts exists and holds the values.
-  
-  if (is.null(rv$absq_amounts)) {
-    showNotification(
-      "Internal Error: Sample amounts table is not initialized.",
-      type = "error"
+hygge_modal <- function() {
+  modalDialog(
+    title = "Hygge Project seq generator",
+    size = "xl",
+    easyClose = TRUE,
+    footer = modalButton("Close"),
+    div(
+      class = "hygge-wrap",
+      fluidRow(
+        # LEFT: Sidebar with steps
+        column(
+          width = 4,
+          class = "hygge-sidebar",
+          
+          # STEP 1: Upload & map
+          div(
+            class = "hygge-table-box",
+            h4("Step 1 · Upload & map columns"),
+            
+            fileInput(
+              "dataFile", "Choose CSV file",
+              accept = c("text/csv", ".csv"),
+              buttonLabel = "Browse...",
+              placeholder = "No file selected",
+              width = "100%"
+            ),
+            
+            # Reset button
+            div(
+              style = "margin-bottom: 15px;",
+              actionButton(
+                "reset_all",
+                "Clear / Reset Data",
+                icon  = icon("refresh"),
+                class = "btn-xs btn-warning"
+              )
+            ),
+            
+            selectInput("col_name_col",      "Column for sample name",  choices = NULL),
+            selectInput("col_position_col",  "Column for position / vial", choices = NULL),
+            selectInput("col_sampletype_col","Column for sample type",  choices = NULL),
+            
+            tags$small(
+              class = "hygge-subtle",
+              "Upload a CSV first, then choose which columns are name, position and type."
+            )
+          ),
+          
+          # STEP 2: Data overview
+          div(
+            class = "hygge-table-box",
+            h4("Step 2 · Data overview"),
+            uiOutput("hygge_overview")
+          ),
+          
+          # STEP 3: Generator settings
+          div(
+            class = "hygge-table-box",
+            h4("Step 3 · Generator settings"),
+            fluidRow(
+              column(
+                6,
+                numericInput("num_eqQCs", "Number of eqQCs", value = 1, min = 0)
+              ),
+              column(
+                6,
+                numericInput("num_MSMSs", "Number of MSMSs", value = 6, min = 0)
+              )
+            ),
+            fluidRow(
+              column(
+                6,
+                numericInput("num_QCs", "QCs before samples", value = 4, min = 0)
+              ),
+              column(
+                6,
+                numericInput("insert_after_samples",
+                             "Insert QC after every N samples",
+                             value = 5, min = 0)
+              )
+            ),
+            checkboxInput(
+              "end_with_qc",
+              "Force sequence to end with a QC",
+              value = TRUE
+            )
+          ),
+          
+          # STEP 4: Edit data
+          # STEP 4: Edit data
+          div(
+            class = "hygge-table-box",
+            
+            # --- START CHANGE: Wrap content in details/summary ---
+            tags$details(
+              
+              # The clickable Header
+              tags$summary(
+                h4(
+                  "Step 4 · Edit table data ",
+                  # This creates the smaller, subtle text
+                  tags$span("(Click to show)", style = "font-size: 0.6em; color: #888; font-weight: normal; margin-left: 5px;"),
+                  style = "display:inline; cursor:pointer"
+                )
+              ),
+              
+              # The Content to hide/show
+              div(
+                style = "margin-top: 15px;", # Add a little spacing when opened
+                
+                tags$small("Edits apply to the 'Uploaded data' tab."),
+                tags$small("Psssst, double click in the data table, to edit any data."),
+                
+                br(), br(),
+                
+                # 4a. Add column
+                strong("Add new column"),
+                fluidRow(
+                  column(6, textInput("new_col_name", NULL, placeholder = "Column name")),
+                  column(6, textInput("new_col_val",  NULL, placeholder = "Fill value"))
+                ),
+                actionButton(
+                  "add_new_col_btn",
+                  "Add & Fill",
+                  icon  = icon("plus"),
+                  class = "btn-xs"
+                ),
+                br(), br(),
+                
+                # 4b. Remove column
+                strong("Remove column"),
+                fluidRow(
+                  column(8, selectInput("col_remove_select", NULL, choices = NULL)),
+                  column(
+                    4,
+                    actionButton(
+                      "remove_col_btn",
+                      "Remove",
+                      icon  = icon("trash"),
+                      class = "btn-xs btn-danger"
+                    )
+                  )
+                ),
+                br(), br(),
+                
+                # 4c. Delete rows
+                strong("Delete row(s)"),
+                tags$small(
+                  class = "hygge-subtle",
+                  "Select one or more rows in 'Uploaded data', then click delete."
+                ),
+                br(),
+                actionButton(
+                  "delete_rows",
+                  "Delete selected rows from table",
+                  class = "btn-xs"
+                ),
+                
+                br(), br(),
+                
+                # 4d. Add / duplicate rows
+                strong("Add row(s)"),
+                tags$small(
+                  class = "hygge-subtle",
+                  "Append an empty row or duplicate selected rows."
+                ),
+                br(),
+                actionButton(
+                  "add_empty_row",
+                  "Add empty row",
+                  class = "btn-xs"
+                ),
+                actionButton(
+                  "dup_rows_btn",
+                  "Duplicate selected rows",
+                  class = "btn-xs"
+                )
+              ) 
+            ) 
+            # --- END CHANGE ---
+          ),
+          
+          # STEP 5: Run & download
+          div(
+            class = "hygge-table-box",
+            h4("Step 5 · Run & download"),
+            
+            strong("1. Process sequence"),
+            br(),
+            bsButton("process", "Process data", style = "primary"),
+            br(), br(),
+            
+            strong("2. Download output"),
+            div(
+              class = "hygge-inline-buttons",
+              downloadButton("downloadData_bruker", "Bruker (.xlsx)"),
+              downloadButton("downloadData",        "Generic (.csv)")
+            )
+          ),
+          
+          # STEP 6: Final Overview & Runtime
+          div(
+            class = "hygge-table-box",
+            h4("Step 6 · Final Overview & Runtime"),
+            
+            # Input for method duration
+            numericInput(
+              "method_duration", 
+              "Method duration inc. injection (min)", 
+              value = 15, 
+              min = 0.1, 
+              step = 0.5
+            ),
+            
+            # The Combined Output (Stats + Runtime)
+            uiOutput("final_stats_ui")
+          )
+          
+        ),
+        
+        # RIGHT: Tabs – uploaded vs processed
+        column(
+          width = 8,
+          div(
+            class = "hygge-table-box hygge-dt",
+            tabsetPanel(
+              id = "hygge_tabs",
+              tabPanel(
+                title = "Uploaded data",
+                h5("Uploaded CSV (source)"),
+                DT::DTOutput("uploadedTable")
+              ),
+              tabPanel(
+                title = "Processed sequence",
+                h5("Generated sequence (result)"),
+                DT::DTOutput("table")
+              )
+            )
+          )
+        )
+      )
     )
-    return()
-  }
-  
-  amt_tbl <- rv$absq_amounts
-  
-  # Check synchronization
-  if (!all(sample_ids %in% amt_tbl$Sample)) {
-    showNotification(
-      "Sample amounts are out of sync. Please close and reopen the window.",
-      type = "error"
-    )
-    return()
-  }
-  
-  idx     <- match(sample_ids, amt_tbl$Sample)
-  raw_amt <- suppressWarnings(as.numeric(amt_tbl$Amount[idx]))
-  
-  # Validation: Do we have valid amounts?
-  if (any(is.na(raw_amt))) {
-    showNotification(
-      "Some sample amounts are missing (NA). Please check the 'Readiness' or 'Manual Amounts' section.",
-      type = "error"
-    )
-    return()
-  }
-  
-  is_bio   <- grepl("Biofluid", key, ignore.case = TRUE)
-  unit_den <- if (is_bio) "\u00B5L" else "mg"
-  unit_lbl <- paste0("pmol/", unit_den)
-  
-  rv$absq_amounts_used <- data.frame(
-    Sample = sample_ids,
-    Amount = raw_amt,
-    Unit   = unit_den,
-    stringsAsFactors = FALSE
   )
-  
-  # 3) match IS rows
-  is_rows <- spikes$IS_row
-  is_map  <- absq_choose_is_index(d, seq, is_rows, method = input$absq_is_method)
-  
-  # 4) math
-  raw_int <- d[, sample_cols, drop = FALSE]
-  is_int  <- d[is_rows[is_map], sample_cols, drop = FALSE]
-  
-  spike_amt_pmol <- spikes$spike_pmol[is_map]  # base = pmol
-  
-  eps       <- 1e-12
-  res       <- (raw_int / pmax(is_int, eps)) * spike_amt_pmol
-  res_final <- sweep(res, 2, raw_amt, "/")  # divide by mass/volume
-  
-  # 5) preview table
-  name_row_idx <- which(seq[, 1] == "Name")[1]
-  if (is.na(name_row_idx)) name_row_idx <- 1
-  
-  compounds  <- d[, name_row_idx]
-  is_used_nm <- d[is_rows[is_map], name_row_idx]
-  
-  preview_df <- data.frame(
-    Compound  = compounds,
-    `IS used` = is_used_nm,
-    Units     = unit_lbl,
-    check.names = FALSE
-  )
-  preview_df <- cbind(preview_df, as.data.frame(res_final))
-  
-  rv$absq_result <- preview_df
-  showNotification(paste("Absolute amounts calculated in", unit_lbl), type = "message")
-  shinyjs::enable("absq_save")
-})
+}
 
-# ------------------------------------------------------------------------------
-# Render result tables
-# ------------------------------------------------------------------------------
 
-output$absq_result_table_modal <- DT::renderDT({
-  req(rv$absq_result)
-  DT::datatable(
-    rv$absq_result,
-    options = list(pageLength = 10, scrollX = TRUE),
-    rownames = FALSE
-  )
-})
-
-output$absq_amounts_table_modal <- DT::renderDT({
-  req(rv$absq_amounts_used)
-  DT::datatable(
-    rv$absq_amounts_used,
-    options = list(pageLength = 10, dom = "t"),
-    rownames = FALSE
-  )
-})
-
-# ------------------------------------------------------------------------------
-# Save back to dataset
-# ------------------------------------------------------------------------------
-
-observeEvent(input$absq_save, {
-  req(rv$absq_result, absq_data(), absq_seq(), input$absq_matrix_type)
-  
-  d   <- absq_data()
-  res <- rv$absq_result
-  
-  meta_cols       <- c("Compound", "IS used", "Units")
-  sample_cols_res <- setdiff(colnames(res), meta_cols)
-  
-  common <- intersect(colnames(d), sample_cols_res)
-  if (!length(common)) {
-    showNotification(
-      "No matching sample columns between data and AQ result.",
-      type = "error"
-    )
-    return()
-  }
-  
-  d_out  <- d
-  idx_d  <- match(common, colnames(d))
-  idx_res <- match(common, colnames(res))
-  d_out[, idx_d] <- as.matrix(res[, idx_res, drop = FALSE])
-  
-  is_bio   <- grepl("Biofluid", input$absq_matrix_type, ignore.case = TRUE)
-  unit_den <- if (is_bio) "uL" else "mg"
-  suffix   <- paste0("_AbsQ_", unit_den)
-  info     <- paste0("Absolute Quant (", input$absq_is_method, ", ", input$absq_spike_unit, ")")
-  
-  rv$tmpData     <- d_out
-  rv$tmpSequence <- absq_seq()
-  
-  updateDataAndSequence(
-    "Absolute Quantification Saved",
-    isTRUE(input$absq_save_as_new),
-    suffix,
-    info
-  )
-  
-  removeModal()
-})
