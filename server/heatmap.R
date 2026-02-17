@@ -96,6 +96,68 @@
       }
     }
   })
+  # Observer to update pickerInput choices based on selected grouping column
+  observe({
+    req(input$enable_grouping_heatmap, input$group_column_heatmap)
+    
+    # Get the current data
+    if (input$select_heatmap_data == "Unsaved data") {
+      data <- rv$tmpData
+      req(!is.null(data))  # Make sure data exists
+    } else {
+      sd <- which(rv$choices %in% input$select_heatmap_data)
+      req(length(sd) > 0)  # Make sure we found the dataset
+      data <- rv$data[[sd]]
+    }
+    
+    # Check if the selected grouping column exists in the data
+    req(input$group_column_heatmap %in% colnames(data))
+    
+    # Get all unique values from the selected column
+    all_values <- unique(data[[input$group_column_heatmap]])
+    all_values <- sort(as.character(all_values[!is.na(all_values)]))
+    
+    # Debug message
+    message(paste0("Updating pickerInput with ", length(all_values), " values from column: ", input$group_column_heatmap))
+    
+    # Update the pickerInput choices
+    updatePickerInput(
+      session = session,
+      inputId = "selected_group_values",
+      choices = all_values,
+      selected = all_values  # Default: all selected
+    )
+  })
+  
+  # update when dataset changes
+  observeEvent(input$select_heatmap_data, {
+    req(input$enable_grouping_heatmap, input$group_column_heatmap)
+    
+    # Get the current data
+    if (input$select_heatmap_data == "Unsaved data") {
+      data <- rv$tmpData
+      req(!is.null(data))
+    } else {
+      sd <- which(rv$choices %in% input$select_heatmap_data)
+      req(length(sd) > 0)
+      data <- rv$data[[sd]]
+    }
+    
+    # Check if the selected grouping column exists
+    if (input$group_column_heatmap %in% colnames(data)) {
+      # Get all unique values from the selected column
+      all_values <- unique(data[[input$group_column_heatmap]])
+      all_values <- sort(as.character(all_values[!is.na(all_values)]))
+      
+      # Update the pickerInput choices
+      updatePickerInput(
+        session = session,
+        inputId = "selected_group_values",
+        choices = all_values,
+        selected = all_values  # Default: all selected
+      )
+    }
+  })
   
   observeEvent(input$run_heatmap, {
     # Ensure a dataset is selected
@@ -118,6 +180,28 @@
       seq_subset <- seq[seq[, "labels"] %in% c("Sample", 2), ]  # Restrict to "Sample" rows
       data_subset <- data[, rownames(seq_subset), drop = FALSE]  # Use row names of seq_subset to filter columns
       
+      # Check if "Name" column exists and is not empty
+      if ("Name" %in% colnames(data)) {
+        if (any(is.na(data[, "Name"]) | data[, "Name"] == "")) {
+          sendSweetAlert(session, "Error",
+                         "No names in Name column. Make sure features have names before generating heatmap.",
+                         type = "error")
+          return()
+        }
+      } else if ("name" %in% colnames(data)) {
+        if (any(is.na(data[, "name"]) | data[, "name"] == "")) {
+          sendSweetAlert(session, "Error",
+                         "No names in name column. Make sure features have names before generating heatmap.",
+                         type = "error")
+          return()
+        }
+      } else {
+        # If neither "Name" nor "name" column exists
+        sendSweetAlert(session, "Error",
+                       "No Name column found. Make sure features have names before generating heatmap.",
+                       type = "error")
+        return()
+      }
       # Check group selection
       if (input$select_groups_heatmap) {
         if (is.null(input$selected_groups_heatmap) || length(input$selected_groups_heatmap) < 2) {
@@ -130,6 +214,53 @@
         data_subset <- data[, rownames(seq_subset), drop = FALSE]  # Subset columns by rownames of seq_subset
       }
       
+      #Filter features by selected group values if grouping is enabled
+      if (input$enable_grouping_heatmap) {
+        # Check if a grouping column is selected
+        req(input$group_column_heatmap)
+        
+        # Check if any values are selected in the pickerInput
+        if (is.null(input$selected_group_values) || length(input$selected_group_values) == 0) {
+          sendSweetAlert(session, "Error",
+                         "Please select at least one group value to display in the heatmap.",
+                         type = "error")
+          return()
+        }
+        
+        groups <- input$group_column_heatmap
+        
+        # Check if the grouping column exists in the data
+        if (!groups %in% colnames(data)) {
+          showNotification(paste("Grouping column", groups, "not found in data."), type = "error")
+          return()
+        }
+        
+        # Get indices of rows (features) that match the selected group values
+        feature_indices <- which(data[[groups]] %in% input$selected_group_values)
+        
+        if (length(feature_indices) == 0) {
+          sendSweetAlert(session, "Error",
+                         "No features match the selected group values.",
+                         type = "error")
+          return()
+        }
+        
+        # Store original row count for messaging
+        original_row_count <- nrow(data)
+        
+        # Filter data and data_subset to keep only selected features
+        data <- data[feature_indices, , drop = FALSE]
+        data_subset <- data_subset[feature_indices, , drop = FALSE]
+        
+        # Show success message about filtering
+        showNotification(
+          paste("Filtered to", length(feature_indices), "features based on group selection"),
+          type = "message",
+          duration = 3
+        )
+        
+        message(paste0("Filtered to ", length(feature_indices), " features based on group selection"))
+      }
       
       enable_groups <- input$enable_grouping_heatmap
       groups <- input$group_column_heatmap

@@ -74,7 +74,7 @@
       showModal(
         modalDialog(
           title = "Invalid group names", size = "m", easyClose = TRUE,
-          footer = list(actionButton("group_name_format", "Format names"), modalButton("Dismiss")),
+          footer = list(actionButton("group_name_format", "Format names"), modalButton("Continue with the current format")),
           fluidRow(
             column(12, p("Invalid group names found. Group names must be alphanumeric and not include spaces. The use of ´_´ has been allowed."))
           )

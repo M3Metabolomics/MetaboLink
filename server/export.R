@@ -1,20 +1,32 @@
-  observeEvent(input$export_xml_list, {
-    tryCatch({
-      validate(
-        need(length(input$export_xml_list) > 0, "No data selected for export")
-      )
-      output$export_xml <- downloadHandler(
-        filename = function() {
-          paste0(names(rv$data[rv$choices %in% input$export_xml_list])[1], ".xlsx")
-        },
-        content = function(file) {
-          write_xlsx(rv$data[rv$choices %in% input$export_xml_list], file)
-        }
-      )
-    }, error = function(e) {
-      showNotification(paste("Error exporting XML:", e$message), type = "error")
-    })
+observeEvent(input$export_xml_list, {
+  tryCatch({
+    # Check if there is anything selected
+    if (length(input$export_xml_list) == 0) {
+      showNotification("No data selected for export", type = "error")
+      return()
+    }
+    # Create the download handler
+    output$export_xml <- downloadHandler(
+      filename = function() {
+        # Just use the first selected item for the filename
+        paste0(input$export_xml_list[1], ".xlsx")
+      },
+      content = function(file) {
+        # Get the indices of selected data
+        indices <- which(rv$choices %in% input$export_xml_list)
+        
+        # Subset the data
+        export_data <- rv$data[indices]
+        
+        # Write to Excel
+        write_xlsx(export_data, file)
+      }
+    )
+    
+  }, error = function(e) {
+    showNotification(paste("Error exporting:", e$message), type = "error")
   })
+})
 
     #########################
   # PolySTest and VSClust #

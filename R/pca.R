@@ -42,8 +42,33 @@ pcaplot <- function(data, sequence, islog) {
   components <- as.data.frame(components)
   # make a data frame with the components
   label <- paste0(row.names(components), ": ", sequence)
-  # Make color palette
-  col <- colorRampPalette(RColorBrewer::brewer.pal(8, "Set1"))(length(unique(sequence$group)))
+  
+  # Number of unique groups
+  n_groups <- length(unique(sequence$group))
+  
+  # Improved color palette for PCA plots
+  if (n_groups <= 8) {
+    # Use Set1 for small number of groups (max 8)
+    col <- RColorBrewer::brewer.pal(n_groups, "Set1")
+  } else if (n_groups <= 12) {
+    # Use Paired palette for medium number of groups (up to 12)
+    col <- RColorBrewer::brewer.pal(n_groups, "Paired")
+  } else if (n_groups <= 20) {
+    # For larger groups, use a custom color palette with better distinction
+    col <- colorRampPalette(c(
+      "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd", 
+      "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf",
+      "#aec7e8", "#ffbb78", "#98df8a", "#ff9896", "#c5b0d5",
+      "#c49c94", "#f7b6d2", "#c7c7c7", "#dbdb8d", "#9edae5"
+    ))(n_groups)
+  } else {
+    # For very large number of groups, use a rainbow palette with high contrast
+    col <- colorRampPalette(c(
+      "#ff0000", "#00ff00", "#0000ff", "#ff00ff", "#00ffff",
+      "#ff8000", "#8000ff", "#0080ff", "#ff0080", "#80ff00",
+      "#ff0000", "#00ff00", "#0000ff", "#ff00ff", "#00ffff"
+    ))(n_groups)
+  }
   
   # Create a data frame with the sample
   pca_df <- data.frame(
@@ -96,7 +121,10 @@ pcaplot <- function(data, sequence, islog) {
     layout(
       # Legend settings
       legend = list(
-        title = list(text = "Color") # Set the title of the legend
+        title = list(text = "Color"),
+        itemsizing = "constant",
+        itemclick = "toggle",
+        itemdoubleclick = "toggleothers"
       ),
       # Set plot background color
       plot_bgcolor = "#e5ecf6",

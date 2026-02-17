@@ -18,7 +18,13 @@ shinyServer(function(input, output, session) {
                        pca_results = list(), # List of PCA results
                        outlier_df = list(), # List of outlier data frames
                        identifier_df = list(), # List of identifier data frames
-                       multipleLipidNamesDf = NULL) 
+                       multipleLipidNamesDf = NULL,
+                       # Absolute Quantification (AQ) state
+                       absq_spikes = list(),       # Stores spike amounts per matrix type
+                       absq_result = NULL,         # Stores the calculated preview table
+                       absq_amounts_used = NULL    # Track specific sample amounts used in calculation
+  )
+  
   
   userConfirmation <- reactiveVal(FALSE)
   disable("upload")

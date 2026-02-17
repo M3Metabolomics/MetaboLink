@@ -276,9 +276,9 @@ unique_compound_names <- function(data) {
 }
 
 
-###############
-# Data cleaning
-###############
+#################
+# Data cleaning #
+#################
 
 # Function to extract patterns from compound names
 # Removes noise, keeping only the name and length (e.g., "CAR 14:1'CAR'[M+H]+" becomes "CAR 14:1")
@@ -363,5 +363,119 @@ remove_patterned_rows <- function(data) {
   filtered_data <- data[!grepl("^.+\\(\\d+:\\d+\\)$", data[[1]]), ]
   return(filtered_data)
 }
+
+
+
+###############
+# Lipid total #
+###############
+
+
+
+
+
+
+
+
+## 1) Parse all C:D fragments from each string (dataset-agnostic)
+## - matches things like 22:6, 18:1, etc. (the colon avoids matching m/z decimals)
+parse_cd_fragments <- function(x) {
+  m <- gregexpr("(?<![0-9A-Za-z])(\\d{1,3}):(\\d{1,2})(?![0-9A-Za-z])", x, perl = TRUE)
+  regmatches(x, m)
+}
+
+## 2) Summarize per string: total carbons, total double bonds, and count of fragments
+summarize_cd <- function(x) {
+  hits_list <- parse_cd_fragments(x)
+  res <- vapply(
+    hits_list,
+    function(hits) {
+      if (length(hits) == 0) return(c(totalC = NA_integer_, totalD = NA_integer_, n = 0L))
+      parts <- do.call(rbind, strsplit(hits, ":", fixed = TRUE))
+      c(
+        totalC = sum(as.integer(parts[, 1])),
+        totalD = sum(as.integer(parts[, 2])),
+        n      = nrow(parts)
+      )
+    },
+    FUN.VALUE = c(totalC = 0L, totalD = 0L, n = 0L)
+  )
+  t(res) # matrix with cols totalC, totalD, n
+}
+
+## 3) Detect entries that contain >= 2 C:D fragments
+has_multiple_cd <- function(x) {
+  summarize_cd(x)[, "n"] >= 2
+}
+
+## 4) Build a standardized total name: Class(totalC:totalD)
+## - Class extraction is configurable; by default it takes the first non-space token
+make_total_name <- function(
+    x,
+    class_regex = "^\\s*([A-Za-z][A-Za-z0-9]*)",
+    default_class = "Lipid",
+    only_if_multiple = TRUE,         # <- act only when there are ≥2 fragments
+    if_false = c("NA", "keep")       # <- what to do otherwise: NA or keep original
+) {
+  if_false <- match.arg(if_false)
+  sums <- summarize_cd(x)
+  
+  cls_match <- regexec(class_regex, x, perl = TRUE)
+  cls <- regmatches(x, cls_match)
+  cls <- vapply(cls, function(g) if (length(g) >= 2) g[2] else default_class, character(1))
+  
+  out <- ifelse(
+    is.na(sums[, "totalC"]),
+    NA_character_,
+    sprintf("%s(%d:%d)", cls, sums[, "totalC"], sums[, "totalD"])
+  )
+  
+  if (only_if_multiple) {
+    multi <- sums[, "n"] >= 2
+    out[!multi] <- if (if_false == "keep") x[!multi] else NA_character_
+  }
+  
+  out
+}
+
+# Base R: drop rows where a column is NA (optionally also blank/"NA" string)
+drop_na_rows <- function(df, col = "lipid_total", also_blank = TRUE) {
+  if (!col %in% names(df)) stop(sprintf("Column '%s' not found.", col))
+  v <- df[[col]]
+  keep <- !is.na(v)
+  if (also_blank) {
+    keep <- keep & nzchar(trimws(v)) & (trimws(v) != "NA")
+  }
+  df[keep, , drop = FALSE]
+}
+
+
+
+
+
+
+
+
+
+
+
+
+# Replace/ensure this version exists in functions.R
+compute_names_mapping <- function(lipid_names) {
+  sums <- summarize_cd(lipid_names)  # your existing helper
+  # Class = first run of letters at the start (e.g., "DG_1(38:4)" -> "DG")
+  classes <- sub("^\\s*([A-Za-z]+).*$", "\\1", lipid_names)
+  data.frame(
+    Compound_Name = lipid_names,
+    Class  = classes,
+    Carbon = as.integer(sums[, "totalC"]),
+    Double = as.integer(sums[, "totalD"]),
+    stringsAsFactors = FALSE
+  )
+}
+
+
+
+
 
 

@@ -20,14 +20,72 @@
         
         data_subset <- data[seq[, "labels"] %in% c("Sample", "QC")] # Get the data for the samples and QC
         
-        if (any(is.na(data[, "Name"]) | data[, "Name"] == "")) {
-          sendSweetAlert(session, "Error",
-                         "No names in Name column.
-                         Make sure features has names ;)",
-                         type = "error")
+        
+        # Check if Name column exists
+        if (!"Name" %in% colnames(data)) {
+          showModal(
+            modalDialog(
+              title = "Missing Name Column", 
+              size = "m", 
+              easyClose = TRUE,
+              footer = list(
+                actionButton("assign_names_pca1", "Create Name column", 
+                             icon = icon("plus"), 
+                             style = "color: #fff; background-color: #337ab7; border-color: #2e6da4"),
+                modalButton("Dismiss", icon = icon("times"))
+              ),
+              fluidRow(
+                column(12, 
+                       p("The dataset does not have a 'Name' column."),
+                       p("Feature names are required for PCA visualization and interpretation."),
+                       p("Would you like to create a Name column with placeholder names?")
+                )
+              )
+            )
+          )
           return()
         }
         
+        # Check if Name column has empty or NA values
+        if (any(is.na(data[, "Name"]) | data[, "Name"] == "")) {
+          showModal(
+            modalDialog(
+              title = "Missing Feature Names", 
+              size = "m", 
+              easyClose = TRUE,
+              footer = list(
+                actionButton("assign_names_pca1", "Assign names", 
+                             icon = icon("pencil"), 
+                             style = "color: #fff; background-color: #337ab7; border-color: #2e6da4"),
+                modalButton("Dismiss", icon = icon("times"))
+              ),
+              fluidRow(
+                column(12, 
+                       p("The dataset has missing or empty names in the 'Name' column."),
+                       p("Feature names are required for PCA visualization and interpretation.")
+                )
+              ),
+              br(),
+              fluidRow(
+                column(6, 
+                       wellPanel(
+                         h5("Assign Names", style = "color: #337ab7;"),
+                         p("Generate placeholder names", style = "font-size: 12px;"),
+                         p("(e.g., Feature1, Feature2, ...)", style = "font-size: 12px; font-style: italic;")
+                       )
+                ),
+                column(6, 
+                       wellPanel(
+                         h5("Dismiss", style = "color: #777;"),
+                         p("Cancel PCA generation", style = "font-size: 12px;"),
+                         p("and fix names manually", style = "font-size: 12px; font-style: italic;")
+                       )
+                )
+              )
+            )
+          )
+          return()
+        }
         rownames(data_subset) <- make.unique(as.character(data[, "Name"])) # Make the rownames unique
         
         seq_subset <- seq[seq[, "labels"] %in% c("Sample", "QC"), ] # Get the sequence for the samples and QC
@@ -86,6 +144,68 @@
       }
     }
   })
+  
+  # Observer for assigning names in PCA1
+  observeEvent(input$assign_names_pca1, {
+    # Remove the modal
+    removeModal()
+    
+    tryCatch({
+      # Get current data based on selection
+      if (input$selectpca1 == "Unsaved data") {
+        data <- rv$tmpData
+        seq <- rv$tmpSequence
+      } else {
+        sd <- which(rv$choices %in% input$selectpca1)
+        data <- rv$data[[sd]]
+        seq <- rv$sequence[[sd]]
+      }
+      
+      # Check if Name column exists
+      if (!"Name" %in% colnames(data)) {
+        # Create Name column with placeholder names
+        data$Name <- paste0("Feature", 1:nrow(data))
+        # Reorder columns to put Name first
+        data <- data[, c("Name", setdiff(colnames(data), "Name"))]
+      } else {
+        # Assign placeholder names where Name is empty or NA
+        missing_name_idx <- which(is.na(data[, "Name"]) | data[, "Name"] == "")
+        
+        # Create placeholder names (Feature + row number)
+        for (i in seq_along(missing_name_idx)) {
+          data[missing_name_idx[i], "Name"] <- paste0("Feature", missing_name_idx[i])
+        }
+      }
+      
+      # Update the data
+      if (input$selectpca1 == "Unsaved data") {
+        rv$tmpData <- data
+        rv$tmpSequence <- seq
+      } else {
+        sd <- which(rv$choices %in% input$selectpca1)
+        rv$data[[sd]] <- data
+        rv$sequence[[sd]] <- seq
+      }
+      
+      # Show success message
+      sendSweetAlert(
+        session, 
+        "Success", 
+        ifelse(! "Name" %in% colnames(data),
+               "Name column created with placeholder names.",
+               paste0("Assigned placeholder names to ", length(missing_name_idx), " features.")),
+        type = "success"
+      )
+      
+      # Automatically re-run PCA after assigning names
+      # This will trigger the PCA calculation again
+      shinyjs::click("run_pca1")
+      
+    }, error = function(e) {
+      showNotification(paste("Error assigning names:", e$message), type = "error")
+    })
+  })
+  
   observeEvent(input$run_pca2, {
     selectchoices <- paste(seq_along(rv$data), ": ", names(rv$data))
     sd <- which(rv$choices %in% input$selectpca2)
@@ -99,6 +219,71 @@
       )
       
       data_subset <- data[seq[, "labels"] %in% c("Sample", "QC")] # Get the data for the samples and QC
+      # Check if Name column exists
+      if (!"Name" %in% colnames(data)) {
+        showModal(
+          modalDialog(
+            title = "Missing Name Column", 
+            size = "m", 
+            easyClose = TRUE,
+            footer = list(
+              actionButton("assign_names_pca2", "Create Name column", 
+                           icon = icon("plus"), 
+                           style = "color: #fff; background-color: #337ab7; border-color: #2e6da4"),
+              modalButton("Dismiss", icon = icon("times"))
+            ),
+            fluidRow(
+              column(12, 
+                     p("The dataset does not have a 'Name' column."),
+                     p("Feature names are required for PCA visualization and interpretation."),
+                     p("Would you like to create a Name column with placeholder names?")
+              )
+            )
+          )
+        )
+        return()
+      }
+      
+      # Check if Name column has empty or NA values
+      if (any(is.na(data[, "Name"]) | data[, "Name"] == "")) {
+        showModal(
+          modalDialog(
+            title = "Missing Feature Names", 
+            size = "m", 
+            easyClose = TRUE,
+            footer = list(
+              actionButton("assign_names_pca2", "Assign names", 
+                           icon = icon("pencil"), 
+                           style = "color: #fff; background-color: #337ab7; border-color: #2e6da4"),
+              modalButton("Dismiss", icon = icon("times"))
+            ),
+            fluidRow(
+              column(12, 
+                     p("The dataset has missing or empty names in the 'Name' column."),
+                     p("Feature names are required for PCA visualization and interpretation.")
+              )
+            ),
+            br(),
+            fluidRow(
+              column(6, 
+                     wellPanel(
+                       h5("Assign Names", style = "color: #337ab7;"),
+                       p("Generate placeholder names", style = "font-size: 12px;"),
+                       p("(e.g., Feature1, Feature2, ...)", style = "font-size: 12px; font-style: italic;")
+                     )
+              ),
+              column(6, 
+                     wellPanel(
+                       h5("Dismiss", style = "color: #777;"),
+                       p("Cancel PCA generation", style = "font-size: 12px;"),
+                       p("and fix names manually", style = "font-size: 12px; font-style: italic;")
+                     )
+              )
+            )
+          )
+        )
+        return()
+      }
       rownames(data_subset) <- make.unique(as.character(data[, "Name"]))
       
       seq_subset <- seq[seq[, "labels"] %in% c("Sample", "QC"), ] # Get the sequence for the samples and QC
@@ -161,4 +346,53 @@
         HTML(text)
       })
     }
+  })
+  
+  # Observer for assigning names in PCA2
+  observeEvent(input$assign_names_pca2, {
+    # Remove the modal
+    removeModal()
+    
+    tryCatch({
+      # Get current data based on selection
+      sd <- which(rv$choices %in% input$selectpca2)
+      data <- rv$data[[sd]]
+      seq <- rv$sequence[[sd]]
+      
+      # Check if Name column exists
+      if (!"Name" %in% colnames(data)) {
+        # Create Name column with placeholder names
+        data$Name <- paste0("Feature", 1:nrow(data))
+        # Reorder columns to put Name first
+        data <- data[, c("Name", setdiff(colnames(data), "Name"))]
+      } else {
+        # Assign placeholder names where Name is empty or NA
+        missing_name_idx <- which(is.na(data[, "Name"]) | data[, "Name"] == "")
+        
+        # Create placeholder names (Feature + row number)
+        for (i in seq_along(missing_name_idx)) {
+          data[missing_name_idx[i], "Name"] <- paste0("Feature", missing_name_idx[i])
+        }
+      }
+      
+      # Update the data
+      rv$data[[sd]] <- data
+      rv$sequence[[sd]] <- seq
+      
+      # Show success message
+      sendSweetAlert(
+        session, 
+        "Success", 
+        ifelse(! "Name" %in% colnames(data),
+               "Name column created with placeholder names.",
+               paste0("Assigned placeholder names to ", length(missing_name_idx), " features.")),
+        type = "success"
+      )
+      
+      # Automatically re-run PCA after assigning names
+      shinyjs::click("run_pca2")
+      
+    }, error = function(e) {
+      showNotification(paste("Error assigning names:", e$message), type = "error")
+    })
   })

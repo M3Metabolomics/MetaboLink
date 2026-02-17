@@ -160,7 +160,57 @@ sidebar <- dashboardSidebar(
                                               style = "margin-right: 0px;",
                                               column(6, bsButton("normalizeIS", "Normalize", width = "100%"), style = "padding-left:0px;"),
                                               column(6, bsButton("saveIS", "Save", width = "100%"), style = "padding-left:0px;")
-                                            )
+                                            ),
+                                            # --- AQ styles (keep once; tags$head is safest if used globally) ---
+                                            tags$head(
+                                              tags$style(HTML("
+    .absq-modal-body { padding: 5px 5px 15px 5px; }
+
+    .absq-section {
+      background-color: #f9fafb;
+      border-radius: 8px;
+      padding: 15px 20px;
+      margin-bottom: 15px;
+      border: 1px solid #e5e7eb;
+    }
+
+    .absq-section h4 {
+      margin-top: 0;
+      margin-bottom: 10px;
+      font-weight: 600;
+    }
+
+    .absq-help-text {
+      margin-top: 25px;
+      color: #6b7280;
+      font-size: 0.9em;
+    }
+
+    #absq_compute, #absq_save { font-weight: 600; }
+
+    /* Spike table alignment */
+    #absq_spike_table_wrapper { margin-left: 0; padding-left: 0; }
+    #absq_spike_table table.dataTable { margin-left: 0 !important; }
+    #absq_spike_table table.dataTable th,
+    #absq_spike_table table.dataTable td { text-align: left; }
+  "))
+                                            ),
+                                            
+                                            # --- AQ trigger in sidebar (place where you want it) ---
+                                            conditionalPanel(
+                                              condition = "input.normalizeIS > 0",
+                                              tags$hr(),
+                                              h4("Absolute Quantification Calculation"),
+                                              actionButton(
+                                                inputId = "absq_open_modal",
+                                                label   = "Open Absolute Quantification window",
+                                                class   = "btn-primary",
+                                                style   = "width:90%;"
+                                              )
+                                            )  
+                                            
+                                            
+                                            
                             ),
                             bsCollapsePanel("Drift correction",
                                             fluidRow(
@@ -248,7 +298,30 @@ sidebar <- dashboardSidebar(
                         column(12, checkboxGroupInput("filesToRemove", "Select files to remove", choices = NULL, selected = NULL), style = "padding-left:0px;"),
                         column(12, bsButton("removeFiles", "Remove", width = "50%"), style = "padding-left:0px;")
                       )
+      ),
+      
+      ############### hygge
+      # in sidebar.R (inside bsCollapse)
+      bsCollapsePanel(
+        "Seq generator", style = "primary",
+        # make an extra-wide modal size
+        tags$head(tags$style(HTML("
+    .modal-dialog.modal-xl { width: 95% !important; max-width: 1600px; }
+    .hygge-wrap { padding: 10px 5px; }
+    .hygge-sidebar .form-group { margin-bottom: 10px; }
+    .hygge-sidebar .btn { width: 100%; }
+    .hygge-inline-buttons .btn { width: 49%; }
+    .hygge-table-box { background:#fff;border:1px solid #eee;border-radius:6px;padding:10px;margin-bottom:12px; }
+    .hygge-dt .dataTables_wrapper { overflow-x: auto; }
+    .hygge-dt table { width: 100% !important; }
+    .hygge-subtle { color:#666; font-size: 12px; }
+  "))),
+        bsButton("hygge_open", "Open generator", width = "90%"),
+        div(class="hygge-subtle", style="margin-top:6px;",
+            "Create a sequence file from a CSV. Click to open.")
       )
+      ################ hygge
+      
     ),
     fluidRow(
       column(12, div(style = "float: right;",
