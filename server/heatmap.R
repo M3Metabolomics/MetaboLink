@@ -36,8 +36,6 @@
         seq <- rv$sequence[[sd]]  # Retrieve the selected sequence
       }
       
-      # seq <- seq[!seq[, "labels"] %in% c("Sample", "QC"), ]  # Restrict rows to "Sample" and "QC"
-      # data <- data[, rownames(seq), drop = FALSE]  # Use row names of seq to filter columns
       
       columns <- colnames(data)
       
@@ -82,10 +80,6 @@
         data <- rv$data[[sd]]  # Retrieve the selected dataset
         seq <- rv$sequence[[sd]]  # Retrieve the selected sequence
       }
-      
-      # TODO crazes the example file
-      # seq <- seq[!seq[, "labels"] %in% c("Sample", "QC"), ] 
-      # data_sub <- data[, rownames(seq), drop = FALSE]  # Use row names of seq to filter columns
       
       # # Extract column names from the selected dataset
       data_colnames <- colnames(data) # Substitude with data_sub
@@ -298,6 +292,17 @@
       rownames(data_subset) <- make.unique(selected_labels)
       rownames(data) <- make.unique(selected_labels) 
       
+      # NEW: Update row names pickerInput with the FINAL row names
+      if (input$show_row_names) {
+        final_row_names <- rownames(data)
+        updatePickerInput(
+          session = session,
+          inputId = "selected_row_names",
+          choices = final_row_names,
+          selected = final_row_names  # Default to all selected
+        )
+      }
+      
       TOP_X <- as.numeric(input$top_x)
       if (is.na(TOP_X) || TOP_X < 1) {
         showNotification("'Number of Top Features' must be a positive integer", type = "error")
@@ -317,13 +322,21 @@
       
       heatmap_plot <- result$heatmap
       top_stats <- result$top_stats
-
-      # Render the heatmap
-      #output$heatmap_plot <- renderPlot({
-      #  if (!is.null(heatmap_plot)) {
-      #    draw(heatmap_plot)
-      #  }
-      #}, height = heatmap_height)
+      
+      # NEW: Filter the top_stats table based on selected row names (if any)
+      if (input$show_row_names && !is.null(input$selected_row_names) && length(input$selected_row_names) > 0) {
+        top_stats <- top_stats[top_stats$Feature %in% input$selected_row_names, , drop = FALSE]
+        
+        if (nrow(top_stats) == 0) {
+          showNotification("No data left after filtering by selected row names.", type = "warning")
+        } else {
+          showNotification(
+            paste("Showing", nrow(top_stats), "rows based on selection"),
+            type = "message",
+            duration = 2
+          )
+        }
+      }
 
       pdf(file = NULL)  # Open a null PDF device to suppress output
 
@@ -335,8 +348,15 @@
         DT::datatable(top_stats, options = list(pageLength = 20))
       })
       
-      
       message(sample(quotes, 1))
       
+    }
+    
+  })
+  ########## NEW OBSERVER FOR top_x CHANGES ##########
+  observeEvent(input$top_x, {
+    # Only trigger if a heatmap has already been generated
+    if (!is.null(rv$last_heatmap)) {
+      shinyjs::click("run_heatmap")
     }
   })

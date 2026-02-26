@@ -215,40 +215,11 @@ plot_heatmap <- function(data_subset, data, seq, TOP_X = 50, dataset_name = "",
     row_groups <- as.character(data[[groups]])[match(rownames(data_matrix_top), rownames(data))]
     row_groups <- factor(row_groups)
   } else {
-    row_groups <- 2
+   # row_groups <- 2 (when there were 2 heatmaps)
+    row_groups <- NULL 
   }
   
   rownames(top_stats) <- 1:nrow(top_stats)
-  
-  # Build the second heatmap using groups if enabled
-  if (enable_groups) {
-    # Extract grouping information from data using the specified column; ensure row names match
-    m <- match(rownames(data_matrix_top), rownames(data))
-    grouping_vector <- as.character(data[[groups]])
-    grouping_vector <- grouping_vector[m]
-    grouping_vector <- factor(grouping_vector)  # Ensure it's a factor
-    unique_groups2 <- levels(grouping_vector)
-    n <- length(unique_groups2)
-    group_colors <- setNames( hue_pal()(n), unique_groups2 )
-    
-    second_heatmap <- Heatmap(
-      grouping_vector,
-      name = "Group",
-      col = group_colors,
-      cluster_columns = FALSE,
-      cluster_rows = cluster_rows,
-      show_heatmap_legend = TRUE,
-      width = unit(3, "mm"),
-      border_gp = gpar(col = "black", lty = 1),
-      heatmap_legend_param = list(
-        title = "Group",
-        at = unique_groups2,
-        col = group_colors
-      )
-    )
-  } else {
-    second_heatmap <- NULL
-  }
   
   # Prepare left and bottom annotations for the primary heatmap
   left_annotation <- rowAnnotation(
@@ -270,8 +241,10 @@ plot_heatmap <- function(data_subset, data, seq, TOP_X = 50, dataset_name = "",
   
   title_txt <- paste0(dataset_name_readable, ": ", paste(unique_group, collapse = " / "))
   
-  column_order <- seq$samples
+  #column_order <- seq$samples
+  column_order <- colnames(data_matrix_top)  # use colnames instead of seq$samples
   column_split <- factor(seq$group, levels = unique(seq$group))
+  
   
   hm_primary <- Heatmap(
     data_matrix_top,
@@ -305,11 +278,7 @@ plot_heatmap <- function(data_subset, data, seq, TOP_X = 50, dataset_name = "",
     border_gp = gpar(col = "black", lty = 1)
   )
   
-  if (!is.null(second_heatmap)) {
-    hm_list <- hm_primary + second_heatmap
-  } else {
-    hm_list <- hm_primary
-  }
+  hm_list <- hm_primary
   
   cat("\n--- Heatmap Created ---\n")
   

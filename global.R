@@ -59,6 +59,9 @@ library(ggnetwork)
 # lipid heatmap
 library("lipidomeR") # new, used in Lipid Heatmap
 
+#Seq generator
+library("openxlsx")
+
 # Source files in R folder
 rFiles <- list.files("./R", pattern = "\\.R$", full.names = TRUE)
 for (file in rFiles) {

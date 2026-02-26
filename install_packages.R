@@ -54,7 +54,8 @@ cran_packages <- c(
   "factoextra",
   "ggdendro",
   "dbscan",
-  "PubChemR"
+  "PubChemR",
+  "openxlsx"
 )
 
 # Bioconductor packages

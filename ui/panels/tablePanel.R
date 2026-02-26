@@ -718,6 +718,12 @@ datatablePanel <- fluidRow(
                              label = "Select column for grouping features: ",
                              value = FALSE
                            ),
+                           uiOutput("grouping_column_ui"),
+                           checkboxInput(
+                             inputId = "select_groups_heatmap",
+                             label = "Select Specific Groups",
+                             value = FALSE
+                           ),
                            # Conditional panel for selecting group values
                            conditionalPanel(
                              condition = "input.enable_grouping_heatmap == true",
@@ -740,12 +746,6 @@ datatablePanel <- fluidRow(
                              )
                            ),
                            
-                           uiOutput("grouping_column_ui"),
-                           checkboxInput(
-                             inputId = "select_groups_heatmap",
-                             label = "Select Specific Groups",
-                             value = FALSE
-                           ),
                            # Dynamic UI for Group Selection (appears when 'select_groups_heatmap' is TRUE)
                            uiOutput("group_selection_ui_heatmap"),
                            checkboxInput("heatmap_islog", "Data is log-transformed.", value = FALSE, width = "100%"),
@@ -761,7 +761,6 @@ datatablePanel <- fluidRow(
                            actionButton("run_heatmap", "Generate Heatmap", width = "100%")
                          )
                        ),
-                       
                        # Right box: Heatmap Customizations
                        column(
                          width = 6,
@@ -801,6 +800,30 @@ datatablePanel <- fluidRow(
                            helpText("Toggle to display or hide column names."),
                            checkboxInput("show_row_names", "Show Row Names:", FALSE),
                            helpText("Toggle to display or hide row names."),
+                           
+                           # Conditional panel for selecting specific row names (appears when show_row_names is TRUE)
+                           conditionalPanel(
+                             condition = "input.show_row_names == true",
+                             wellPanel(
+                               style = "background-color: #f8f9fa; margin-top: 5px; margin-bottom: 10px;",
+                               h5("Select specific rows to display", style = "color: #31708f; font-weight: bold; margin-top: 2px;"),
+                               pickerInput(
+                                 inputId = "selected_row_names",
+                                 label = "Choose row names:",
+                                 choices = NULL,  # Will be populated by server
+                                 selected = NULL,
+                                 multiple = TRUE,
+                                 options = list(
+                                   `actions-box` = TRUE,
+                                   `selected-text-format` = "count > 3",
+                                   `count-selected-text` = "{0} rows selected (out of {1})",
+                                   `live-search` = TRUE  # Adds search functionality
+                                 ),
+                                 width = "100%"
+                               ),
+                               helpText("Select specific rows to display in the heatmap. If none selected, all rows will be shown.")
+                             )
+                           ),
                            checkboxInput("cluster_rows", "Cluster Rows:", TRUE),
                            helpText("Enable or disable hierarchical clustering of rows."),
                            checkboxInput("show_row_dend", "Show Row Dendrogram:", FALSE),

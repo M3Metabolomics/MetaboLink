@@ -262,6 +262,7 @@
     )
 
     if (!is.null(rv$activeFile)) {
+      tryCatch({
       if (input$select_volcano_data == "Unsaved data") {
         data <- rv$tmpData  # Use the temporary data
         seq <- rv$tmpSequence  # Use the temporary sequence
@@ -273,10 +274,42 @@
         seq <- rv$sequence[[sd]]  # Retrieve the selected sequence
         dataset_name <- names(rv$data)[sd]  # Retrieve dataset name
       }
+        # DEBUG: Print structure to identify issues
+        message("=== VOLCANO DEBUG ===")
+        message(paste("Data dimensions:", nrow(data), "x", ncol(data)))
+        message(paste("Sequence dimensions:", nrow(seq), "x", ncol(seq)))
+        message("Sequence column names:", paste(colnames(seq), collapse = ", "))
+        message("Unique labels in seq:", paste(unique(seq[, "labels"]), collapse = ", "))
+        
+        # Make group names syntactically valid
+        if ("group" %in% colnames(seq)) {
+          # Convert any numeric group names to valid R names
+          original_groups <- seq$group
+          seq$group <- make.names(as.character(seq$group))
+          
+          # Show warning if names were changed
+          if (!identical(original_groups, seq$group)) {
+            message("Group names were modified to be syntactically valid:")
+            changed_indices <- which(original_groups != seq$group)
+            for (i in changed_indices) {
+              message(paste0("  '", original_groups[i], "' -> '", seq$group[i], "'"))
+            }
+          }
+        }
+        
+        # Also check the labels column if it exists
+        if ("labels" %in% colnames(seq)) {
+          seq$labels <- make.names(as.character(seq$labels))
+        }
+        
       
       label_column <- input$volcano_labels
       numerator <- input$group1_vol
       denominator <- input$group2_vol
+      
+      # Make sure the selected groups match the modified names
+      numerator <- make.names(as.character(numerator))
+      denominator <- make.names(as.character(denominator))
       
       # make an error check that numerator and denominator are not the same
       if (numerator == denominator) {
@@ -401,8 +434,51 @@
         }
       }
       
-      seq_subset <- seq[seq[, "labels"] %in% c("Sample"), ]  # Restrict to "Sample" rows
-      data_subset <- data[, c(rownames(seq_subset)), drop = FALSE]  # Use row names of seq_subset to filter columns
+      #seq_subset <- seq[seq[, "labels"] %in% c("Sample"), ]  # Restrict to "Sample" rows
+      #data_subset <- data[, c(rownames(seq_subset)), drop = FALSE]  # Use row names of seq_subset to filter columns
+      
+      # FIX: Better sequence filtering for samples
+      # Check what's in the labels column
+      sample_indices <- which(seq[, "labels"] %in% c("Sample"))
+      
+      if (length(sample_indices) == 0) {
+        # Try alternative: maybe labels are in a different column or use different naming
+        message("No 'Sample' found in labels column. Checking first column...")
+        sample_indices <- which(seq[, 1] %in% c("Sample"))
+      }
+      
+      if (length(sample_indices) == 0) {
+        sendSweetAlert(session, "Error",
+                       "No samples found in the sequence file. Check that your sequence has 'Sample' labels.",
+                       type = "error")
+        return()
+      }
+      
+      message(paste("Found", length(sample_indices), "samples"))
+      
+      seq_subset <- seq[sample_indices, , drop = FALSE]
+      
+      # Check if seq_subset has rownames
+      if (is.null(rownames(seq_subset)) || length(rownames(seq_subset)) == 0) {
+        sendSweetAlert(session, "Error",
+                       "Sequence subset has no rownames. Check sequence file format.",
+                       type = "error")
+        return()
+      }
+      
+      # Filter data columns based on seq_subset rownames
+      # Make sure the rownames of seq_subset match column names in data
+      valid_cols <- intersect(rownames(seq_subset), colnames(data))
+      
+      if (length(valid_cols) == 0) {
+        sendSweetAlert(session, "Error",
+                       "Column names in data do not match row names in sequence. Check your data and sequence files.",
+                       type = "error")
+        return()
+      }
+      
+      message(paste("Using", length(valid_cols), "columns for data subset"))
+      data_subset <- data[, valid_cols, drop = FALSE]
       
       selected_labels <- as.character(data[[label_column]])
       fallback <- if ("Name" %in% colnames(data)) {
@@ -423,8 +499,19 @@
       
       stat_results <- calculate_stats(data_subset, seq_subset, adjust.method = pAdjustMethod)
       
+      # Check if stat_results is valid
+      if (is.null(stat_results) || nrow(stat_results) == 0) {
+        sendSweetAlert(session, "Error",
+                       "Statistical calculation returned no results. Check your data.",
+                       type = "error")
+        return()
+      }
+      
       target_contrast   <- paste0(numerator, "_vs_", denominator)
       reversed_contrast <- paste0(denominator, "_vs_", numerator)
+      
+      message(paste("Available contrasts:", paste(unique(stat_results$Contrast), collapse = ", ")))
+      message(paste("Looking for:", target_contrast, "or", reversed_contrast))
       
       # If  contrast is present in stat_results:
       if (target_contrast %in% stat_results$Contrast) {
@@ -439,12 +526,20 @@
         # Rename the contrast column to reflect the new direction
         sub_df$Contrast <- target_contrast
       } else {
-        # No matching contrast found; handle how you like (warn user, or return empty)
-        warning(
-          paste0("No matching contrast found for '", numerator, " vs ", denominator, "'. ",
-                 "Available contrasts are: ", paste(unique(stat_results$Contrast), collapse=", "))
-        )
-        sub_df <- data.frame()
+        # No matching contrast found
+        sendSweetAlert(session, "Error",
+                       paste0("No matching contrast found for '", numerator, " vs ", denominator, "'.\n",
+                              "Available contrasts: ", paste(unique(stat_results$Contrast), collapse=", ")),
+                       type = "error")
+        return()
+      }
+      
+      # Check if sub_df is empty
+      if (nrow(sub_df) == 0) {
+        sendSweetAlert(session, "Error",
+                       "No data after contrast filtering.",
+                       type = "error")
+        return()
       }
       
       data <- data %>%
@@ -501,5 +596,11 @@
       })
       
       message(sample(quotes, 1))
-    }
+      }, error = function(e) {
+      sendSweetAlert(session, "Error",
+                     paste("Volcano plot error:", e$message),
+                     type = "error")
+      message(paste("Full error:", e))
+    })
+  }
   })
