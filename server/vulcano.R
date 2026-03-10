@@ -1,268 +1,268 @@
-  # Generate Volcano Plot
+# Generate Volcano Plot
+
+observeEvent(input$select_volcano_data, {
+  req(input$select_volcano_data) # Ensure a dataset is selected
   
-  observeEvent(input$select_volcano_data, {
-    req(input$select_volcano_data) # Ensure a dataset is selected
-    
-    if (!is.null(rv$activeFile)) {
-      if (input$select_volcano_data == "Unsaved data") {
-        data <- rv$tmpData  # Use the temporary data
-      } else {
-        # Get the index of the selected dataset
-        sd <- which(rv$choices %in% input$select_volcano_data)
-        data <- rv$data[[sd]]  # Retrieve the selected dataset
-      }
-      
-      # Extract column names from the selected dataset
-      data_colnames <- colnames(data)
-      
-      columns <- c("volcano_labels")
-      
-      for (column in columns) {
-        # Update the 'identifier_column' select input with the new choices
-        updateSelectInput(session, column, choices = data_colnames)
-      }
+  if (!is.null(rv$activeFile)) {
+    if (input$select_volcano_data == "Unsaved data") {
+      data <- rv$tmpData  # Use the temporary data
+    } else {
+      # Get the index of the selected dataset
+      sd <- which(rv$choices %in% input$select_volcano_data)
+      data <- rv$data[[sd]]  # Retrieve the selected dataset
     }
-  })
-  # Define the reactive value at the top of the server 
-  savedDatasetNameVolcano <- reactiveVal("Volcano Plot: ")
-  # Observe the input for the volcano title and update the reactive value
-  observe({
-    savedDatasetNameVolcano(input$volcano_title)
     
-    output$displayName <- renderText({
-      paste("Current Heatmap Title:", savedDatasetNameVolcano())
-    })
-  })
+    # Extract column names from the selected dataset
+    data_colnames <- colnames(data)
+    
+    columns <- c("volcano_labels")
+    
+    for (column in columns) {
+      # Update the 'identifier_column' select input with the new choices
+      updateSelectInput(session, column, choices = data_colnames)
+    }
+  }
+})
+# Define the reactive value at the top of the server 
+savedDatasetNameVolcano <- reactiveVal("Volcano Plot: ")
+# Observe the input for the volcano title and update the reactive value
+observe({
+  savedDatasetNameVolcano(input$volcano_title)
   
-  output$feature_selection_ui_volcano <- renderUI({
-    if (!input$enable_feature_selection) return(NULL)  # Only show if checkbox is checked
-    req(input$select_volcano_data)  # Ensure a dataset is selected
-    
-    if (!is.null(rv$activeFile)) {
-      if (input$select_volcano_data == "Unsaved data") {
-        data <- rv$tmpData  # Use the temporary data
-        seq <- rv$tmpSequence  # Use the temporary sequence
-      } else {
-        # Get the index of the selected dataset
-        sd <- which(rv$choices %in% input$select_volcano_data)
-        data <- rv$data[[sd]]  # Retrieve the selected dataset
-        seq <- rv$sequence[[sd]]  # Retrieve the selected sequence
-      }
-      
-      # Filter sequence to include only "Sample" rows
-      seq <- seq[!seq[, "labels"] %in% c("Sample", "QC"), ]
-      data <- data[, rownames(seq), drop = FALSE]  # Filter data based on seq row names
-      
-      columns <- colnames(data)  # Extract column names
-      
-      default_val <- if ("refmet_name" %in% columns) {
-        "refmet_name"
-      } else {
-        columns[1]  # Default to first column if "refmet_name" is not found
-      }
-      
-      # **Fix: Wrap in `tagList()` so both UI elements render correctly**
-      tagList(
-        selectInput(
-          "volcano_feature_column",  # Input ID for selecting feature column
-          "Select Feature Column:",
-          choices = columns,
-          selected = default_val,
-          width = "100%"
-        ),
-        
-        selectizeInput(
-          "selected_features_volcano",
-          "Select Features:",
-          choices = NULL,  # Choices will be updated dynamically
-          multiple = TRUE,
-          options = list(
-            placeholder = "Search & Select Features",
-            maxOptions = 100  # Show only 100 at a time
-          )
-        )
-      )
-    }
+  output$displayName <- renderText({
+    paste("Current Heatmap Title:", savedDatasetNameVolcano())
   })
-  observeEvent(input$volcano_feature_column, {
-    req(input$volcano_feature_column, input$select_volcano_data)  # Ensure valid inputs
-    
-    if (!is.null(rv$activeFile)) {
-      if (input$select_volcano_data == "Unsaved data") {
-        data <- rv$tmpData
-      } else {
-        sd <- which(rv$choices %in% input$select_volcano_data)
-        data <- rv$data[[sd]]
-      }
-      
-      # Get the unique feature names from the selected column
-      feature_choices <- unique(data[[input$volcano_feature_column]])
-      
-      updateSelectizeInput(
-        session,
-        "selected_features_volcano",
-        choices = feature_choices,
-        selected = NULL,  # Reset selection
-        server = TRUE  # **Enable Server-Side Processing**
-      )
-    }
-  })
+})
+
+output$feature_selection_ui_volcano <- renderUI({
+  if (!input$enable_feature_selection) return(NULL)  # Only show if checkbox is checked
+  req(input$select_volcano_data)  # Ensure a dataset is selected
   
-  output$group_selection_ui_volcano <- renderUI({
-    if (!input$enable_group_selection) return(NULL)
-    req(input$select_volcano_data)
-    
-    # Retrieve data (this example is based on your existing code)
-    if (!is.null(rv$activeFile)) {
-      if (input$select_volcano_data == "Unsaved data") {
-        data <- rv$tmpData  
-        seq <- rv$tmpSequence  
-      } else {
-        sd <- which(rv$choices %in% input$select_volcano_data)
-        data <- rv$data[[sd]]
-        seq <- rv$sequence[[sd]]
-      }
-      
-      seq <- seq[!seq[, "labels"] %in% c("Sample", "QC"), ]
-      data <- data[, rownames(seq), drop = FALSE]
-      columns <- colnames(data)
-      
-      default_val <- if ("sub_class" %in% columns) {
-        "sub_class"
-      } else if ("Lipid.Abbreviation" %in% columns) {
-        "Lipid.Abbreviation"
-      } else {
-        columns[1]
-      }
+  if (!is.null(rv$activeFile)) {
+    if (input$select_volcano_data == "Unsaved data") {
+      data <- rv$tmpData  # Use the temporary data
+      seq <- rv$tmpSequence  # Use the temporary sequence
+    } else {
+      # Get the index of the selected dataset
+      sd <- which(rv$choices %in% input$select_volcano_data)
+      data <- rv$data[[sd]]  # Retrieve the selected dataset
+      seq <- rv$sequence[[sd]]  # Retrieve the selected sequence
     }
     
+    # Filter sequence to include only "Sample" rows
+    seq <- seq[!seq[, "labels"] %in% c("Sample", "QC"), ]
+    data <- data[, rownames(seq), drop = FALSE]  # Filter data based on seq row names
+    
+    columns <- colnames(data)  # Extract column names
+    
+    default_val <- if ("refmet_name" %in% columns) {
+      "refmet_name"
+    } else {
+      columns[1]  # Default to first column if "refmet_name" is not found
+    }
+    
+    # **Fix: Wrap in `tagList()` so both UI elements render correctly**
     tagList(
       selectInput(
-        "volcano_group_column",
-        "Select Group Column:",
+        "volcano_feature_column",  # Input ID for selecting feature column
+        "Select Feature Column:",
         choices = columns,
         selected = default_val,
         width = "100%"
       ),
+      
       selectizeInput(
-        "selected_group_volcano",
-        "Select Group:",
-        choices = NULL,
+        "selected_features_volcano",
+        "Select Features:",
+        choices = NULL,  # Choices will be updated dynamically
         multiple = TRUE,
-        options = list(placeholder = "Search & Select Groups")
-      )
-    )
-  })
-  
-  darken_color <- function(color, factor = 0.7) {
-    rgb_val <- grDevices::col2rgb(color)
-    dark_rgb <- pmax(rgb_val * factor, 0)
-    rgb(t(dark_rgb), maxColorValue = 255)
-  }
-  
-  output$group_color_ui <- renderUI({
-    # Only show if group selection is enabled and at least one group is selected
-    if (!input$enable_group_selection) return(NULL)
-    req(input$selected_group_volcano)
-    
-    selected_groups <- input$selected_group_volcano
-    n_groups <- length(selected_groups)
-    default_colors <- hue_pal()(n_groups)
-
-    # For each selected group, create two colourInput widgets:
-    ui_list <- lapply(seq_along(selected_groups), function(i) {
-      grp <- selected_groups[i]
-      grp_id <- make.names(grp)
-      
-      fill_default <- default_colors[i]
-      outline_default <- darken_color(fill_default)
-      
-      tagList(
-        h4(paste("Group:", grp)),
-        fluidRow(
-          column(
-            width = 6,
-            colourInput(
-              inputId = paste0("color_", grp_id, "_fill"),
-              label = "Fill:",
-              value = fill_default  # Default fill color
-            )
-          ),
-          column(
-            width = 6,
-            colourInput(
-              inputId = paste0("color_", grp_id, "_outline"),
-              label = "Outline:",
-              value = outline_default  # Default outline color
-            )
-          )
+        options = list(
+          placeholder = "Search & Select Features",
+          maxOptions = 100  # Show only 100 at a time
         )
       )
-    })
-    
-    tagList(ui_list)
-  })
-  observeEvent(input$volcano_group_column, {
-    req(input$volcano_group_column,
-        input$select_volcano_data)  # Ensure valid inputs
-    
-    if (!is.null(rv$activeFile)) {
-      if (input$select_volcano_data == "Unsaved data") {
-        data <- rv$tmpData
-      } else {
-        sd <- which(rv$choices %in% input$select_volcano_data)
-        data <- rv$data[[sd]]
-      }
-      
-      # Ensure the selected column exists in data before accessing it
-      if (!input$volcano_group_column %in% colnames(data)) return()
-      
-      unique_groups <- unique(data[[input$volcano_group_column]])
-      
-      updateSelectizeInput(
-        session,
-        "selected_group_volcano",
-        choices = unique_groups,
-        selected = unique_groups[2],  # Reset selection
-        server = TRUE  # Enable server-side processing for large lists
-      )
-      
-    }
-  })
+    )
+  }
+})
+observeEvent(input$volcano_feature_column, {
+  req(input$volcano_feature_column, input$select_volcano_data)  # Ensure valid inputs
   
-  output$parameter_selection_ui_volcano <- renderUI({
-    if (isTRUE(input$select_parameter_volcano)) {
+  if (!is.null(rv$activeFile)) {
+    if (input$select_volcano_data == "Unsaved data") {
+      data <- rv$tmpData
+    } else {
+      sd <- which(rv$choices %in% input$select_volcano_data)
+      data <- rv$data[[sd]]
+    }
+    
+    # Get the unique feature names from the selected column
+    feature_choices <- unique(data[[input$volcano_feature_column]])
+    
+    updateSelectizeInput(
+      session,
+      "selected_features_volcano",
+      choices = feature_choices,
+      selected = NULL,  # Reset selection
+      server = TRUE  # **Enable Server-Side Processing**
+    )
+  }
+})
+
+output$group_selection_ui_volcano <- renderUI({
+  if (!input$enable_group_selection) return(NULL)
+  req(input$select_volcano_data)
+  
+  # Retrieve data (this example is based on your existing code)
+  if (!is.null(rv$activeFile)) {
+    if (input$select_volcano_data == "Unsaved data") {
+      data <- rv$tmpData  
+      seq <- rv$tmpSequence  
+    } else {
+      sd <- which(rv$choices %in% input$select_volcano_data)
+      data <- rv$data[[sd]]
+      seq <- rv$sequence[[sd]]
+    }
+    
+    seq <- seq[!seq[, "labels"] %in% c("Sample", "QC"), ]
+    data <- data[, rownames(seq), drop = FALSE]
+    columns <- colnames(data)
+    
+    default_val <- if ("sub_class" %in% columns) {
+      "sub_class"
+    } else if ("Lipid.Abbreviation" %in% columns) {
+      "Lipid.Abbreviation"
+    } else {
+      columns[1]
+    }
+  }
+  
+  tagList(
+    selectInput(
+      "volcano_group_column",
+      "Select Group Column:",
+      choices = columns,
+      selected = default_val,
+      width = "100%"
+    ),
+    selectizeInput(
+      "selected_group_volcano",
+      "Select Group:",
+      choices = NULL,
+      multiple = TRUE,
+      options = list(placeholder = "Search & Select Groups")
+    )
+  )
+})
+
+darken_color <- function(color, factor = 0.7) {
+  rgb_val <- grDevices::col2rgb(color)
+  dark_rgb <- pmax(rgb_val * factor, 0)
+  rgb(t(dark_rgb), maxColorValue = 255)
+}
+
+output$group_color_ui <- renderUI({
+  # Only show if group selection is enabled and at least one group is selected
+  if (!input$enable_group_selection) return(NULL)
+  req(input$selected_group_volcano)
+  
+  selected_groups <- input$selected_group_volcano
+  n_groups <- length(selected_groups)
+  default_colors <- hue_pal()(n_groups)
+  
+  # For each selected group, create two colourInput widgets:
+  ui_list <- lapply(seq_along(selected_groups), function(i) {
+    grp <- selected_groups[i]
+    grp_id <- make.names(grp)
+    
+    fill_default <- default_colors[i]
+    outline_default <- darken_color(fill_default)
+    
+    tagList(
+      h4(paste("Group:", grp)),
       fluidRow(
         column(
           width = 6,
-          numericInput("x_param", "X axis limit", value = 5)
+          colourInput(
+            inputId = paste0("color_", grp_id, "_fill"),
+            label = "Fill:",
+            value = fill_default  # Default fill color
+          )
         ),
         column(
           width = 6,
-          numericInput("y_param", "Y axis limit", value = 5)
+          colourInput(
+            inputId = paste0("color_", grp_id, "_outline"),
+            label = "Outline:",
+            value = outline_default  # Default outline color
+          )
         )
       )
-    }
+    )
   })
   
-  observeEvent(input$run_volcano_plot, {
-    req(
-      input$select_volcano_data,
-      input$volcano_labels,
-      input$group1_vol, 
-      input$group2_vol,
-      input$log2fc_threshold, 
-      input$pval_threshold,
-      input$color_up_fill,
-      input$color_up_outline,
-      input$color_down_fill,
-      input$color_down_outline,
-      input$color_ns_fill,
-      input$color_ns_outline
+  tagList(ui_list)
+})
+observeEvent(input$volcano_group_column, {
+  req(input$volcano_group_column,
+      input$select_volcano_data)  # Ensure valid inputs
+  
+  if (!is.null(rv$activeFile)) {
+    if (input$select_volcano_data == "Unsaved data") {
+      data <- rv$tmpData
+    } else {
+      sd <- which(rv$choices %in% input$select_volcano_data)
+      data <- rv$data[[sd]]
+    }
+    
+    # Ensure the selected column exists in data before accessing it
+    if (!input$volcano_group_column %in% colnames(data)) return()
+    
+    unique_groups <- unique(data[[input$volcano_group_column]])
+    
+    updateSelectizeInput(
+      session,
+      "selected_group_volcano",
+      choices = unique_groups,
+      selected = unique_groups[2],  # Reset selection
+      server = TRUE  # Enable server-side processing for large lists
     )
+    
+  }
+})
 
-    if (!is.null(rv$activeFile)) {
-      tryCatch({
+output$parameter_selection_ui_volcano <- renderUI({
+  if (isTRUE(input$select_parameter_volcano)) {
+    fluidRow(
+      column(
+        width = 6,
+        numericInput("x_param", "X axis limit", value = 5)
+      ),
+      column(
+        width = 6,
+        numericInput("y_param", "Y axis limit", value = 5)
+      )
+    )
+  }
+})
+
+observeEvent(input$run_volcano_plot, {
+  req(
+    input$select_volcano_data,
+    input$volcano_labels,
+    input$group1_vol, 
+    input$group2_vol,
+    input$log2fc_threshold, 
+    input$pval_threshold,
+    input$color_up_fill,
+    input$color_up_outline,
+    input$color_down_fill,
+    input$color_down_outline,
+    input$color_ns_fill,
+    input$color_ns_outline
+  )
+  
+  if (!is.null(rv$activeFile)) {
+    tryCatch({
       if (input$select_volcano_data == "Unsaved data") {
         data <- rv$tmpData  # Use the temporary data
         seq <- rv$tmpSequence  # Use the temporary sequence
@@ -274,34 +274,34 @@
         seq <- rv$sequence[[sd]]  # Retrieve the selected sequence
         dataset_name <- names(rv$data)[sd]  # Retrieve dataset name
       }
-        # DEBUG: Print structure to identify issues
-        message("=== VOLCANO DEBUG ===")
-        message(paste("Data dimensions:", nrow(data), "x", ncol(data)))
-        message(paste("Sequence dimensions:", nrow(seq), "x", ncol(seq)))
-        message("Sequence column names:", paste(colnames(seq), collapse = ", "))
-        message("Unique labels in seq:", paste(unique(seq[, "labels"]), collapse = ", "))
+      # DEBUG: Print structure to identify issues
+      message("=== VOLCANO DEBUG ===")
+      message(paste("Data dimensions:", nrow(data), "x", ncol(data)))
+      message(paste("Sequence dimensions:", nrow(seq), "x", ncol(seq)))
+      message("Sequence column names:", paste(colnames(seq), collapse = ", "))
+      message("Unique labels in seq:", paste(unique(seq[, "labels"]), collapse = ", "))
+      
+      # Make group names syntactically valid
+      if ("group" %in% colnames(seq)) {
+        # Convert any numeric group names to valid R names
+        original_groups <- seq$group
+        seq$group <- make.names(as.character(seq$group))
         
-        # Make group names syntactically valid
-        if ("group" %in% colnames(seq)) {
-          # Convert any numeric group names to valid R names
-          original_groups <- seq$group
-          seq$group <- make.names(as.character(seq$group))
-          
-          # Show warning if names were changed
-          if (!identical(original_groups, seq$group)) {
-            message("Group names were modified to be syntactically valid:")
-            changed_indices <- which(original_groups != seq$group)
-            for (i in changed_indices) {
-              message(paste0("  '", original_groups[i], "' -> '", seq$group[i], "'"))
-            }
+        # Show warning if names were changed
+        if (!identical(original_groups, seq$group)) {
+          message("Group names were modified to be syntactically valid:")
+          changed_indices <- which(original_groups != seq$group)
+          for (i in changed_indices) {
+            message(paste0("  '", original_groups[i], "' -> '", seq$group[i], "'"))
           }
         }
-        
-        # Also check the labels column if it exists
-        if ("labels" %in% colnames(seq)) {
-          seq$labels <- make.names(as.character(seq$labels))
-        }
-        
+      }
+      
+      # Also check the labels column if it exists
+      if ("labels" %in% colnames(seq)) {
+        seq$labels <- make.names(as.character(seq$labels))
+      }
+      
       
       label_column <- input$volcano_labels
       numerator <- input$group1_vol
@@ -353,7 +353,7 @@
         message(paste0("X axis limit: ", x_param))
         message(paste0("Y axis limit: ", y_param))
       }
-    
+      
       enable_feature_selection <- input$enable_feature_selection
       message(paste0("Feature Selection Enabled: ", enable_feature_selection))
       if (enable_feature_selection) {
@@ -369,7 +369,6 @@
         message("Available Groups:")
         print(available_groups)
       }
-      
       
       if (input$enable_group_selection && !is.null(input$selected_group_volcano)) {
         selected_groups <- input$selected_group_volcano
@@ -397,7 +396,7 @@
         }
         
         showNotification("This feature is of limited use and may not work as expected. ",
-                 "As of 5/3-2025 this feature is still under development.", type = "message")
+                         "As of 5/3-2025 this feature is still under development.", type = "message")
         
         # Check if feature column exists
         if (input$volcano_feature_column %in% colnames(data)) {
@@ -433,9 +432,6 @@
           showNotification("Group column not found in dataset.", type = "error")
         }
       }
-      
-      #seq_subset <- seq[seq[, "labels"] %in% c("Sample"), ]  # Restrict to "Sample" rows
-      #data_subset <- data[, c(rownames(seq_subset)), drop = FALSE]  # Use row names of seq_subset to filter columns
       
       # FIX: Better sequence filtering for samples
       # Check what's in the labels column
@@ -561,6 +557,7 @@
           ) %>%
           rename(Group = !!sym(input$volcano_group_column)) %>%
           relocate(Group, .before = "Contrast")
+        
       }
       
       # assign the sub_df a name for debugging
@@ -596,11 +593,11 @@
       })
       
       message(sample(quotes, 1))
-      }, error = function(e) {
+    }, error = function(e) {
       sendSweetAlert(session, "Error",
                      paste("Volcano plot error:", e$message),
                      type = "error")
       message(paste("Full error:", e))
     })
   }
-  })
+})

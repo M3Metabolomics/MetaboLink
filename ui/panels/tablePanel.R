@@ -719,11 +719,6 @@ datatablePanel <- fluidRow(
                              value = FALSE
                            ),
                            uiOutput("grouping_column_ui"),
-                           checkboxInput(
-                             inputId = "select_groups_heatmap",
-                             label = "Select Specific Groups",
-                             value = FALSE
-                           ),
                            # Conditional panel for selecting group values
                            conditionalPanel(
                              condition = "input.enable_grouping_heatmap == true",
@@ -745,7 +740,11 @@ datatablePanel <- fluidRow(
                                )
                              )
                            ),
-                           
+                           checkboxInput(
+                             inputId = "select_groups_heatmap",
+                             label = "Select Specific Groups",
+                             value = FALSE
+                           ),
                            # Dynamic UI for Group Selection (appears when 'select_groups_heatmap' is TRUE)
                            uiOutput("group_selection_ui_heatmap"),
                            checkboxInput("heatmap_islog", "Data is log-transformed.", value = FALSE, width = "100%"),

@@ -108,16 +108,18 @@ pcaplot <- function(data, sequence, islog) {
   scree_plot_plotly <- ggplotly(scree_plot)
   
   # Create the PCA plot with rounded hover text for PC1 and PC2
-  pca_plot <- ggplot(pca_df, aes(x = PC1, y = PC2, color = group)) + 
+  pca_plot <- ggplot(pca_df, aes(x = PC1, y = PC2, color = group,
+                                 text = paste("Sample:", sample,
+                                              "<br>PC1:", round(PC1, 2),
+                                              "<br>PC2:", round(PC2, 2)))) + 
     geom_point(size = 1) + 
     labs( 
       x = paste0("PC1 (", round(PC_df[1,2], digits = 2), "% explained var.)"),
       y = paste0("PC2 (", round(PC_df[2,2], digits = 2), "% explained var.)")) +
     theme_bw() +
     scale_color_manual(values = col)
-  
   # Convert ggplot to plotly object and add hover text
-  pca_plot_plotly <- ggplotly(pca_plot, tooltip = c("x", "y", "color")) %>%
+  pca_plot_plotly <- ggplotly(pca_plot, tooltip = "text") %>%
     layout(
       # Legend settings
       legend = list(

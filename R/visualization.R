@@ -157,9 +157,7 @@ plot_heatmap <- function(data_subset, data, seq, TOP_X = 50, dataset_name = "",
   message(paste0("Initial row count: ", initial_row_count))
   message(paste0("Removed ", initial_row_count - final_row_count, " rows containing NA values."))
   
-  # TODO: Statistical testing should be done on the original data, not the scaled one!!!
-  # TODO: Statistical testing should be done on the original data, not the scaled one!!!
-  # TODO: Statistical testing should be done on the original data, not the scaled one!!!
+  
   
   # Perform statistical testing (T-test if 2 groups, ANOVA if >=3)
   cat("\n--- Statistical Testing ---\n")
@@ -243,7 +241,7 @@ plot_heatmap <- function(data_subset, data, seq, TOP_X = 50, dataset_name = "",
   
   #column_order <- seq$samples
   column_order <- colnames(data_matrix_top)  # use colnames instead of seq$samples
-  column_split <- factor(seq$group, levels = unique(seq$group))
+  column_split <- factor(seq$group, levels = sort(unique(seq$group)))
   
   
   hm_primary <- Heatmap(
@@ -282,7 +280,14 @@ plot_heatmap <- function(data_subset, data, seq, TOP_X = 50, dataset_name = "",
   
   cat("\n--- Heatmap Created ---\n")
   
-  return(list(heatmap = hm_list, top_stats = top_stats))
+  #return(list(heatmap = hm_list, top_stats = top_stats))
+  return(list(
+    heatmap = hm_list, 
+    top_stats = top_stats,
+    rows_removed = initial_row_count - final_row_count,
+    initial_rows = initial_row_count,
+    final_rows = final_row_count
+  ))
 }
 
 # Volcano ----

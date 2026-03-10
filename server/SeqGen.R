@@ -535,60 +535,25 @@ observeEvent(input$reset_all, {
 # 11. Download handlers
 #========================================================
 
-
 # Processed sequence as CSV
 output$downloadData <- downloadHandler(
   filename = function() {
     paste("data-output-", Sys.Date(), ".csv", sep = "")
   },
   content = function(file) {
-    # Explicit check for data
-    if (is.null(data_processed())) {
-      # Create a simple error message CSV
-      error_df <- data.frame(
-        Error = "No data available. Please process data first.",
-        Timestamp = as.character(Sys.time())
-      )
-      write.csv(error_df, file, row.names = FALSE)
-      return()
-    }
-    
-    # Get the data and write it
-    df <- data_processed()
-    write.csv(df, file, row.names = FALSE)
+    req(data_processed())
+    write.csv(data_processed(), file, row.names = FALSE)
   }
 )
 
-# Bruker-format as XLSX
+#Bruker-format as XLSX
 output$downloadData_bruker <- downloadHandler(
   filename = function() {
-    paste("bruker-format-", Sys.Date(), ".xlsx", sep = "")
+    paste("data-output-", Sys.Date(), ".xlsx", sep = "")
   },
   content = function(file) {
-    # Explicit check for data
-    if (is.null(data_processed())) {
-      # Create a simple error message Excel file
-      error_df <- data.frame(
-        Error = "No data available. Please process data first.",
-        Timestamp = as.character(Sys.time())
-      )
-      openxlsx::write.xlsx(error_df, file)
-      return()
-    }
-    
-    # Try to get Bruker data, with error handling
-    df <- tryCatch({
-      brunker_data()  # This will fail gracefully if data_processed is NULL
-    }, error = function(e) {
-      # If brunker_data fails, return an error data frame
-      data.frame(
-        Error = paste("Failed to generate Bruker data:", e$message),
-        Timestamp = as.character(Sys.time())
-      )
-    })
-    
-    # Write the file (whether it's real data or an error message)
-    openxlsx::write.xlsx(df, file, rowNames = FALSE)
+    req(brunker_data())
+    openxlsx::write.xlsx(brunker_data(), file, rowNames = FALSE)
   }
 )
 

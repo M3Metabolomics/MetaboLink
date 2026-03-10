@@ -15,11 +15,12 @@
       if (input$select_groups_heatmap) {  # Only render if the checkbox is checked
         selectInput(
           "selected_groups_heatmap", 
-          "Select Groups:", 
-          choices = seq$group, 
-          selected = seq$group[1],  # Default to the first group
-          multiple = TRUE,          # Allow multiple selections
-          width = "100%"
+          "Select Groups (in display order):", 
+          choices = sort(unique(seq$group)),  # Still show sorted alphabetically
+          selected = sort(unique(seq$group))[1],  # Default
+          multiple = TRUE,
+          width = "100%",
+          selectize = TRUE  # This makes it searchable and orderable
         )
       }
     }
@@ -196,18 +197,61 @@
                        type = "error")
         return()
       }
-      # Check group selection
+      # Handle group selection if enabled
       if (input$select_groups_heatmap) {
-        if (is.null(input$selected_groups_heatmap) || length(input$selected_groups_heatmap) < 2) {
-          showNotification("Please select at least two groups for the heatmap.", type = "error")
-          return()  # Stop execution
+        # User wants to select specific groups
+        if (is.null(input$selected_groups_heatmap) || length(input$selected_groups_heatmap) == 0) {
+          sendSweetAlert(session, "Error",
+                         "Please select at least one group when 'Select Specific Groups' is enabled.",
+                         type = "error")
+          return()
         }
-        # Filter seq_subset and data_subset by selected groups
-        selected_groups_heatmap <- input$selected_groups_heatmap
-        seq_subset <- seq_subset[seq_subset$group %in% selected_groups_heatmap, ]
-        data_subset <- data[, rownames(seq_subset), drop = FALSE]  # Subset columns by rownames of seq_subset
+        
+        # Get the selected groups (in the order they were selected)
+        selected_groups <- input$selected_groups_heatmap
+        
+        # Filter seq_subset to only include selected groups
+        seq_subset <- seq_subset[seq_subset$group %in% selected_groups, ]
+        
+        # SAFETY CHECK
+        if (nrow(seq_subset) == 0) {
+          sendSweetAlert(session, "Error",
+                         "No samples match the selected groups.",
+                         type = "error")
+          return()
+        }
+        
+        # Order the groups according to selection order
+        seq_subset$group <- factor(seq_subset$group, levels = selected_groups)
+        
+      } else {
+        # No specific group selection - include ALL groups
+        # Just ensure groups are factors for consistent ordering
+        all_groups <- unique(seq_subset$group)
+        seq_subset$group <- factor(seq_subset$group, levels = sort(all_groups))
       }
       
+      # Reorder seq_subset rows based on the factor order
+      seq_subset <- seq_subset[order(seq_subset$group), ]
+      
+      # Filter data_subset columns based on the ordered seq_subset rownames
+      data_subset <- data[, rownames(seq_subset), drop = FALSE]
+      
+      # SAFETY CHECK
+      if (ncol(data_subset) == 0) {
+        sendSweetAlert(session, "Error",
+                       "No data columns remain after filtering.",
+                       type = "error")
+        return()
+      }
+      
+      # SAFETY CHECK 2
+      if (ncol(data_subset) == 0) {
+        sendSweetAlert(session, "Error",
+                       "No data columns remain after sample group filtering.",
+                       type = "error")
+        return()
+      }
       #Filter features by selected group values if grouping is enabled
       if (input$enable_grouping_heatmap) {
         # Check if a grouping column is selected
@@ -245,6 +289,22 @@
         # Filter data and data_subset to keep only selected features
         data <- data[feature_indices, , drop = FALSE]
         data_subset <- data_subset[feature_indices, , drop = FALSE]
+        
+        # SAFETY CHECK 3
+        if (nrow(data) == 0) {
+          sendSweetAlert(session, "Error",
+                         "No features remain after group value filtering.",
+                         type = "error")
+          return()
+        }
+        
+        # SAFETY CHECK 4
+        if (nrow(data_subset) == 0) {
+          sendSweetAlert(session, "Error",
+                         "No data remains for heatmap after filtering.",
+                         type = "error")
+          return()
+        }
         
         # Show success message about filtering
         showNotification(
@@ -289,6 +349,22 @@
       }
       missing <- is.na(selected_labels) | selected_labels == ""
       selected_labels[missing] <- fallback[missing]
+      
+      # SAFETY CHECK 5
+      if (length(selected_labels) == 0) {
+        sendSweetAlert(session, "Error",
+                       "No labels available for setting row names.",
+                       type = "error")
+        return()
+      }
+      
+      if (nrow(data_subset) == 0) {
+        sendSweetAlert(session, "Error",
+                       "data_subset is empty before setting row names.",
+                       type = "error")
+        return()
+      }
+      
       rownames(data_subset) <- make.unique(selected_labels)
       rownames(data) <- make.unique(selected_labels) 
       
@@ -322,6 +398,24 @@
       
       heatmap_plot <- result$heatmap
       top_stats <- result$top_stats
+      
+      # NEW: Check if rows were removed due to missing values
+      if (result$rows_removed > 0) {
+        if (nrow(top_stats) < TOP_X) {
+          showNotification(
+            paste("Showing", nrow(top_stats), "of", TOP_X, "requested features -", 
+                  result$rows_removed, "features removed due to missing values"),
+            type = "warning",
+            duration = 5
+          )
+        } else {
+          showNotification(
+            paste("Removed", result$rows_removed, "features with missing values"),
+            type = "message",
+            duration = 3
+          )
+        }
+      }
       
       # NEW: Filter the top_stats table based on selected row names (if any)
       if (input$show_row_names && !is.null(input$selected_row_names) && length(input$selected_row_names) > 0) {
