@@ -150,23 +150,6 @@ datatablePanel <- fluidRow(
                    )
                  )
         ),
-        tabPanel("Feature drift",
-                 fluidRow(
-                   column(3, box(width = NULL, DTOutput("dt_drift_panel"))),
-                   column(9, 
-                          box(
-                            width = NULL,
-                            fluidRow(
-                              column(4, selectizeInput("drift_select", "Select dataset to compare with", choices = NULL, width = "100%", options = list(placeholder = "Select file"))),
-                              column(2, style = "margin-top: 25px;", bsButton("drift_1", label = "Individual", block = TRUE)),
-                              column(2, style = "margin-top: 25px;", bsButton("drift_2", label = "CV variation", block = TRUE)),
-                              column(2, style = "margin-top: 25px;", bsButton("drift_3", label = "CV distribution", block = TRUE))
-                            ),
-                          ),
-                          uiOutput("drift_ui")
-                   )
-                 )
-        ),
         tabPanel("Feature viewer",
                  fluidRow(
                    column(3, box(

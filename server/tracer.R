@@ -1,5 +1,4 @@
-
-#TODO: make all of these reactive like in MFA3
+# Define parameters as reactive to make functions interactive
 mfa <- reactiveValues(
   raw = NULL,
   threshold = NULL,
@@ -19,7 +18,6 @@ metadata <- reactiveValues(
   time_points = NULL
 )
 
-# Threshold data - separate for easier access and to keep raw intact
 threshold <- reactiveValues(
   data = NULL,
   normalized_sum = NULL,
@@ -50,11 +48,18 @@ plot_settings <- reactiveValues(
   data_type = "normalized_sum",
 )
 
+filter_status <- reactiveValues(
+  is_active = FALSE,
+  threshold_value = NULL,
+  rows_removed = NULL,
+  removed_details = NULL
+)
+# Data format check and return informative notification in case of structure related issues in MS file
 validate_tracer_data <- function(data) {
   required_cols <- c("Analyte", "Analysis")
   missing_required <- setdiff(required_cols, colnames(data))
 
-  isotopologue_pattern <- "^(?:A|M)\\+\\d+$"  # Pattern for isotopologues like A+0, A+1, A+2, etc.
+  isotopologue_pattern <- "^(?:A|M)\\+\\d+$" 
   isotopologues <- grep(isotopologue_pattern, colnames(data), value = TRUE)
   
   problems <- character()
@@ -72,6 +77,7 @@ validate_tracer_data <- function(data) {
   return(TRUE)
 }
 
+#Extract related columns and values from the imported datasets
 observeEvent(input$is_tracer_data, {
   if(input$is_tracer_data) {
 
@@ -80,9 +86,16 @@ observeEvent(input$is_tracer_data, {
 
     mfa$raw <- rv$data[[rv$activeFile]]
     metadata$metabolites <- unique(mfa$raw$Analyte)
-    metadata$isotopologues <- grep("^A\\+", colnames(mfa$raw), value = TRUE) #TODO: read also M+X, other patterns?
+    metadata$isotopologues <- grep("^A\\+", colnames(mfa$raw), value = TRUE) 
     metadata$samples <- unique(mfa$raw$Analysis)
     
+    # Clear any existing threshold filter when new data is loaded
+    filter_status$is_active <- FALSE
+    threshold$data <- NULL
+    threshold$normalized_sum <- NULL
+    threshold$normalized_zero <- NULL
+    threshold$long_format_sum <- NULL
+    threshold$long_format_zero <- NULL
 
 
     update_choices <- function(ids, choices, type = c("select", "picker")) {
@@ -94,24 +107,20 @@ observeEvent(input$is_tracer_data, {
           } else {
             updatePickerInput(session, id, choices = choices)
           }
-        }, error = function(e) NULL) # ignore missing UI elements
+        }, error = function(e) NULL) 
       }
     }
     update_choices(c("fc_metabolite", "ip_metabolite", "it_metabolite", "gt_metabolite", "metabolite_time_table", "mp_metabolite"), metadata$metabolites, type = "select")
     update_choices("ip_sample", metadata$samples, type = "select")
     update_choices("it_isotopologues", metadata$isotopologues, type = "picker")
 
-
-    #TODO: deal with threshold since it has to be applied before normalization
-
-
-    # Normalization
+    # Normalization by row sums
     numerical_cols <- mfa$raw[, metadata$isotopologues, drop = FALSE]
 
     normalized_sum <- numerical_cols / rowSums(numerical_cols, na.rm = TRUE)
     mfa$normalized_sum <- cbind(mfa$raw[, c("Analyte", "Analysis")], normalized_sum)
 
-    # Normalize each row by the first isotopologue (typically A+0)
+    # Normalize each row by the first isotopologue (normalization A+0)
     normalized_zero <- sweep(
       numerical_cols,
       MARGIN = 1,
@@ -123,16 +132,23 @@ observeEvent(input$is_tracer_data, {
   }
 })
 
-
+#Extract related columns and values from the imported metadata
 observeEvent(input$inputTracerSequence, {
     valid <- validate_tracer_data(rv$data[[rv$activeFile]])
     if (!valid) {  return()  }
   
     mfa$raw <- rv$data[[rv$activeFile]]
     metadata$metabolites <- unique(mfa$raw$Analyte)
-    metadata$isotopologues <- grep("^A\\+", colnames(mfa$raw), value = TRUE) #TODO: read also M+X, other patterns?
+    metadata$isotopologues <- grep("^A\\+", colnames(mfa$raw), value = TRUE) 
     metadata$samples <- unique(mfa$raw$Analysis)
     
+    # Clear any existing threshold filter when new data is loaded
+    filter_status$is_active <- FALSE
+    threshold$data <- NULL
+    threshold$normalized_sum <- NULL
+    threshold$normalized_zero <- NULL
+    threshold$long_format_sum <- NULL
+    threshold$long_format_zero <- NULL
 
     update_choices <- function(ids, choices, type = c("select", "picker")) {
       type <- match.arg(type)
@@ -143,7 +159,7 @@ observeEvent(input$inputTracerSequence, {
           } else {
             updatePickerInput(session, id, choices = choices)
           }
-        }, error = function(e) NULL) # ignore missing UI elements
+        }, error = function(e) NULL) 
       }
     }
     update_choices(c("fc_metabolite", "ip_metabolite", "it_metabolite", "gt_metabolite", "metabolite_time_table", "mp_metabolite"), metadata$metabolites, type = "select")
@@ -151,15 +167,12 @@ observeEvent(input$inputTracerSequence, {
     update_choices("it_isotopologues", metadata$isotopologues, type = "picker")
 
 
-    #TODO: deal with threshold since it has to be applied before normalization
-
-
-    # Normalization
+    # Normalization by row sums
     numerical_cols <- mfa$raw[, metadata$isotopologues, drop = FALSE]
     normalized_sum <- numerical_cols / rowSums(numerical_cols, na.rm = TRUE)
     mfa$normalized_sum <- cbind(mfa$raw[, c("Analyte", "Analysis")], normalized_sum)
 
-    # Normalize each row by the first isotopologue (typically A+0)
+    # Normalize each row by the first isotopologue (A+0)
     normalized_zero <- sweep(
       numerical_cols,
       MARGIN = 1,
@@ -177,7 +190,7 @@ observeEvent(input$inputTracerSequence, {
     return()
   }
 
-  # normalize column names (case-insensitive) and require sample/group/time
+  # normalize column names (case-insensitive) and require sample/group/time columns
   colmap <- tolower(colnames(sequence))
   required <- c("sample", "group", "time")
   missing_cols <- setdiff(required, colmap)
@@ -192,7 +205,7 @@ observeEvent(input$inputTracerSequence, {
   names(sequence)[which(colmap == "time")] <- "time"
   sequence <- sequence[, c("sample", "group", "time")]
 
-  # check that samples in sequence are present in raw_data (also the other way around?)
+  # check that samples in sequence are present in raw_data 
   if (!all(sequence$sample %in% mfa$raw$Analysis)) {
     showNotification("Some samples in the tracer sequence are not present in the raw data.", type = "error")
     return()
@@ -201,12 +214,12 @@ observeEvent(input$inputTracerSequence, {
     showNotification("Some samples in the raw data are not present in the tracer sequence.", type = "error")
     return()
   }
-
+  
   # update reactive values and UI
   mfa$sequence <- sequence
   metadata$groups <- unique(sequence$group)
   metadata$time_points <- sort(unique(sequence$time))
-  metadata$group_time <- unique(paste(sequence$group, sequence$time, sep = "_")) #TODO should be sorted by group then time
+  metadata$group_time <- unique(paste(sequence$group, sequence$time, sep = "_")) 
   mfa$sequence$group_time <- paste(sequence$group, sequence$time, sep = "_")
 
   updateSelectInput(session, "fc_group", choices = metadata$groups)
@@ -220,15 +233,13 @@ observeEvent(input$inputTracerSequence, {
     mfa$sequence
   })
 
+  #Convert data to long format for ggplot2 visualizations
   mfa$normalized_long_format <- format4ggplot(mfa$normalized_sum, mfa$sequence, metadata$isotopologues)
 
   mfa$normalized_long_format_ref <- format4ggplot(mfa$normalized_zero, mfa$sequence, metadata$isotopologues)
   
   mfa$raw_long_format <- format4ggplot(mfa$raw, mfa$sequence, metadata$isotopologues)
 
-  #output$ggplotdata <- renderDT({
-   # mfa$normalized_long_format
-  #})
   output$tracer_sequence <- renderDT({ mfa$sequence })
   output$ggplotdata <- renderDT({ mfa$normalized_long_format })
 
@@ -236,63 +247,207 @@ observeEvent(input$inputTracerSequence, {
 
 
 ### OVERVIEW PANEL ###
-
+# Remove rows where sum of all isotopologue intensities <= defined threshold
 observeEvent(input$update_threshold, {
-  req(input$intensity_threshold, mfa$raw)
-  threshold <- as.numeric(input$intensity_threshold)
-  if (!is.null(mfa$raw)) {
+  tryCatch({
+    req(input$intensity_threshold, mfa$raw)
+    req(metadata$isotopologues)
+    
+    threshold_value <- as.numeric(input$intensity_threshold)
+    
+    showNotification("Starting threshold filter...", type = "message", duration = 2)  
+    
+    # Store pre-filter rows for comparison
     raw_rows <- paste(mfa$raw$Analyte, mfa$raw$Analysis, sep = ": ")
-
-    filtered_data <- mfa$raw[rowSums(mfa$raw[, metadata$isotopologues], na.rm = TRUE) >= threshold, ]
-
+    
+    # Apply threshold to raw data
+    row_sums <- rowSums(mfa$raw[, metadata$isotopologues, drop = FALSE], na.rm = TRUE)
+    keep_indices <- row_sums >= threshold_value
+    filtered_raw <- mfa$raw[keep_indices, , drop = FALSE]
+    
+    showNotification(paste("Filtered to", nrow(filtered_raw), "rows"), type = "message", duration = 2)  # Changed
+    
+    # Store filtering metadata
+    filter_status$is_active <- TRUE
+    filter_status$threshold_value <- threshold_value
+    filter_status$rows_removed <- nrow(mfa$raw) - nrow(filtered_raw)
+    
+    removed_rows <- raw_rows[!keep_indices]
+    filter_status$removed_details <- removed_rows
+    
+    # Update threshold reactive values with filtered data
+    threshold$data <- filtered_raw
+    
+    # Only proceed with normalization if we have filtered data
+    if (nrow(filtered_raw) > 0) {
+      # Re-normalize the filtered data
+      numerical_cols <- filtered_raw[, metadata$isotopologues, drop = FALSE]
+      
+      # Row-sum normalization on filtered data
+      normalized_sum <- numerical_cols / rowSums(numerical_cols, na.rm = TRUE)
+      threshold$normalized_sum <- cbind(filtered_raw[, c("Analyte", "Analysis"), drop = FALSE], normalized_sum)
+      
+      # A+0 normalization on filtered data
+      first_iso_col <- metadata$isotopologues[1]
+      normalized_zero <- sweep(
+        numerical_cols,
+        MARGIN = 1,
+        STATS = filtered_raw[[first_iso_col]],
+        FUN = "/"
+      )
+      threshold$normalized_zero <- cbind(filtered_raw[, c("Analyte", "Analysis"), drop = FALSE], normalized_zero)
+      
+      showNotification("Normalization complete", type = "message", duration = 2)  
+      
+      # Convert to long format for plotting
+      if (!is.null(mfa$sequence)) {
+        threshold$long_format_sum <- format4ggplot(
+          threshold$normalized_sum, 
+          mfa$sequence, 
+          metadata$isotopologues
+        )
+        threshold$long_format_zero <- format4ggplot(
+          threshold$normalized_zero, 
+          mfa$sequence, 
+          metadata$isotopologues
+        )
+      }
+    }
+    
+    # Show removed rows
     output$threshold_warning <- renderUI({
-      if (nrow(filtered_data) < nrow(mfa$raw)) {
-        # Check which samples were removed for which metabolites
-        filtered_rows <- paste(filtered_data$Analyte, filtered_data$Analysis, sep = ": ")
-        removed_samples <- setdiff(raw_rows, filtered_rows)
+      if (nrow(filtered_raw) < nrow(mfa$raw)) {
         div(
           style = "color: orange;",
-          tags$strong("Removed rows:"),
-          tags$ul(
-            lapply(removed_samples, function(x) tags$li(x))
-          )
+          tags$strong(paste("Removed", filter_status$rows_removed, "rows with total intensity <", threshold_value)),
+          tags$br(),
+          if(length(removed_rows) <= 20) {
+            tagList(
+              tags$strong("Removed rows (metabolite: sample):"),
+              tags$ul(
+                lapply(removed_rows, function(x) tags$li(x))
+              )
+            )
+          } else {
+            tags$p(paste("(Showing first 20 of", length(removed_rows), "removed rows)"))
+          }
         )
       } else {
         div(
           style = "color: green;",
-          "Intensity threshold applied successfully. No data points were removed."
+          paste("✓ Intensity threshold", threshold_value, "applied. No data points were removed.")
         )
       }
     })
+    
+    # Update the displayed table
     output$tracer_table <- renderDT({
-      filtered_data
+      filtered_raw
     })
+    
+    if (filter_status$rows_removed > 0) {
+      showNotification(
+        paste("Threshold filter applied. Filtered", filter_status$rows_removed, "rows."),
+        type = "message"  
+      )
+    } else {
+      showNotification(
+        paste("Threshold filter applied. No rows were filtered out."),
+        type = "message"  
+      )
+    }
+    
+  }, error = function(e) {
+    showNotification(paste("ERROR:", e$message), type = "error", duration = 10)
+    print(paste("Error details:", e$message))
+  })
+})
+ 
+# ============================================================================
+# ACTIVE DATA SELECTORS to account for threshold filtering across all sections
+# ============================================================================
 
-    threshold$data <- filtered_data
-
-    output$tracer_table <-renderDT({
-      filtered_data
-    })
+# Active raw data 
+active_raw <- reactive({
+  if (!is.null(threshold$data) && filter_status$is_active) {
+    return(threshold$data)
+  } else {
+    return(mfa$raw)
   }
 })
 
-#TODO Update normalized data when threshold changes
+# Active row-sum normalized data
+active_normalized_sum <- reactive({
+  if (!is.null(threshold$normalized_sum) && filter_status$is_active) {
+    return(threshold$normalized_sum)
+  } else {
+    return(mfa$normalized_sum)
+  }
+})
 
+# Active A+0 normalized data
+active_normalized_zero <- reactive({
+  if (!is.null(threshold$normalized_zero) && filter_status$is_active) {
+    return(threshold$normalized_zero)
+  } else {
+    return(mfa$normalized_zero)
+  }
+})
 
-#TODO Update ggplot data when norm changes (also when sequence is uploaded)
-observeEvent(c(mfa$normalized_long_format, mfa$sequence), {
-  req(mfa$normalized_long_format, mfa$sequence)
+# Active long format (row-sum normalized) for plotting
+active_long_format_sum <- reactive({
+  if (!is.null(threshold$long_format_sum) && filter_status$is_active) {
+    return(threshold$long_format_sum)
+  } else {
+    return(mfa$normalized_long_format)
+  }
+})
 
-  output$ggplotdata <- renderDT({
-    mfa$normalized_long_format
-  })
+# Active long format (A+0 normalized) for plotting
+active_long_format_zero <- reactive({
+  if (!is.null(threshold$long_format_zero) && filter_status$is_active) {
+    return(threshold$long_format_zero)
+  } else {
+    return(mfa$normalized_long_format_ref)
+  }
+})
+
+# Active raw long format 
+active_raw_long_format <- reactive({
+  if (!is.null(threshold$data) && filter_status$is_active && !is.null(mfa$sequence)) {
+    return(format4ggplot(threshold$data, mfa$sequence, metadata$isotopologues))
+  } else {
+    return(mfa$raw_long_format)
+  }
+})
+
+# Output for UI filter status indicator
+output$filter_is_active <- reactive({
+  filter_status$is_active
+})
+outputOptions(output, "filter_is_active", suspendWhenHidden = FALSE)
+
+output$filter_threshold_display <- renderText({
+  filter_status$threshold_value
+})
+
+output$filter_rows_removed <- renderText({
+  filter_status$rows_removed
 })
 
 
-### Fractional Contribution ###
+# DATA DISPLAY OBSERVERS
+observeEvent(c(active_long_format_sum(), mfa$sequence), {
+  req(active_long_format_sum(), mfa$sequence)
+  
+  output$ggplotdata <- renderDT({
+    active_long_format_sum()
+  })
+})
 
+### Fractional Contribution ###
 output$fc_plot <- renderPlotly({
-  req(mfa$raw)
+  req(active_raw())
   req(mfa$sequence)
   req(input$fc_metabolite)
   req(input$fc_group)
@@ -307,12 +462,12 @@ output$fc_plot <- renderPlotly({
   
   plot_settings$sample <- group_samples
 
-  plotFractionalContribution(mfa$raw, mfa$sequence, plot_settings)
+  plotFractionalContribution(active_raw(), mfa$sequence, plot_settings)
 
 })
 
 output$fc_table <- renderDT({
-  req(mfa$raw)
+  req(active_raw())
   req(mfa$sequence)
   req(input$fc_metabolite)
   req(input$fc_group)
@@ -327,7 +482,7 @@ output$fc_table <- renderDT({
   
   plot_settings$sample <- group_samples
 
-  selectFCtable(mfa$raw, mfa$sequence, plot_settings)
+  selectFCtable(active_raw(), mfa$sequence, plot_settings)
 
 })
 
@@ -335,33 +490,34 @@ output$fc_table <- renderDT({
 
 # Normalized to row sums
 output$ip_plot <- renderPlotly({
-  req(mfa$normalized_long_format, input$ip_metabolite, input$ip_sample)
+  req(active_long_format_sum(), input$ip_metabolite, input$ip_sample)
 
   plot_settings$metabolite <- input$ip_metabolite
   plot_settings$sample <- input$ip_sample
 
-  plotIsotopologueDist(mfa$normalized_long_format, plot_settings)
+  plotIsotopologueDist(active_long_format_sum(), plot_settings)
 })
 
 # Normalized to A.0
 output$ip_plot_A0 <- renderPlotly({
-  req(mfa$normalized_long_format_ref, input$ip_metabolite, input$ip_sample)
+  req(active_long_format_zero(), input$ip_metabolite, input$ip_sample)
 
   plot_settings$metabolite <- input$ip_metabolite
   plot_settings$sample <- input$ip_sample
   
-  plotIsotopologueDist2(mfa$normalized_long_format_ref, plot_settings)
+  plotIsotopologueDist2(active_long_format_zero(), plot_settings)
 })
 
 
 ### Isotopologue Timecourse ###
 observeEvent(input$it_metabolite, {
   req(input$it_metabolite)
-  req(mfa$normalized_sum)
+  req(active_normalized_sum())
   req(metadata$isotopologues) 
 
-  metabolite_data <- mfa$normalized_sum[mfa$normalized_sum$Analyte == input$it_metabolite, ]
+  metabolite_data <- active_normalized_sum()[active_normalized_sum()$Analyte == input$it_metabolite, ]
   available_iso <- intersect(metadata$isotopologues, colnames(metabolite_data)) 
+  
   # Remove isotologues that are all NA or zero
   available_iso <- available_iso[colSums(metabolite_data[, available_iso], na.rm = TRUE) > 0]
 
@@ -373,10 +529,10 @@ observeEvent(input$update_it_plot, {
   
   # Select data based on data type
   if (input$it_data_type == "raw") {
-    data_source <- mfa$raw_long_format
+    data_source <- active_raw_long_format()
     source_name <- "Raw"
   } else if (input$it_data_type == "normalized_sum") {
-    data_source <- mfa$normalized_long_format
+    data_source <- active_long_format_sum()
     source_name <- "Normalized"
   } else {
     showNotification("Invalid data type selected.", type = "error")
@@ -399,9 +555,9 @@ observeEvent(input$update_it_plot, {
       {
         # Get the appropriate data source for mean calculation
         if (input$it_data_type == "raw") {
-          metabolite_data <- mfa$raw[mfa$raw$Analyte == input$it_metabolite, ]
+          metabolite_data <- active_raw()[active_raw()$Analyte == input$it_metabolite, ]
         } else {
-          metabolite_data <- mfa$normalized_sum[mfa$normalized_sum$Analyte == input$it_metabolite, ]
+          metabolite_data <- active_normalized_sum()[active_normalized_sum()$Analyte == input$it_metabolite, ]
         }
         
         available_iso <- intersect(metadata$isotopologues, colnames(metabolite_data))
@@ -421,7 +577,7 @@ observeEvent(input$update_it_plot, {
   }
   
 
-  # Pick isotopologues to keep (prefer user selection, then top5, then all)
+  # Pick isotopologues to keep 
   iso_choices <- NULL
   if (!is.null(input$it_isotopologues) && length(input$it_isotopologues) > 0) {
     iso_choices <- input$it_isotopologues
@@ -435,7 +591,7 @@ observeEvent(input$update_it_plot, {
     return()
   }
 
-   # filter data safely
+   # filter data and show notification for displaying the state of data after filtering
   data <- tryCatch({
     df <- data_source
     df <- df[df$Analyte == input$it_metabolite, ]
@@ -497,9 +653,24 @@ observeEvent(input$update_it_plot, {
         sd_abundance = sd(Abundance, na.rm = TRUE),
         se_abundance = sd_abundance / sqrt(n_replicates),
         .groups = 'drop'
-      ) %>%
-      dplyr::select(-n_replicates) %>%
+      ) 
+      
+    # Renormalize mean abundances per groupTime so they sum to 1
+    if (input$it_data_type == "normalized_sum") {
+      summarized_data <- summarized_data %>%
+        dplyr::group_by(groupTime) %>%
+        dplyr::mutate(
+          total_abundance = sum(mean_abundance, na.rm = TRUE),
+          mean_abundance = mean_abundance / total_abundance
+        ) %>%
+        dplyr::ungroup() %>%
+        dplyr::select(-total_abundance)
+    }
+    
+    # Calculate stacking positions for BOTH raw and normalized
+    summarized_data <- summarized_data %>%
       dplyr::group_by(groupTime) %>%
+      dplyr::arrange(desc(Isotopologue), .by_group = TRUE) %>%
       dplyr::mutate(
         cum_mean = cumsum(mean_abundance),
         segment_bottom = cum_mean - mean_abundance,
@@ -547,24 +718,24 @@ observeEvent(input$update_it_plot, {
 
 ### Metabolite per group ###
 output$mp_plot <- renderPlotly({
-  req(mfa$normalized_long_format, mfa$sequence, input$mp_metabolite, input$mp_group, input$mp_plot_type)
+  req(active_long_format_sum(), mfa$sequence, input$mp_metabolite, input$mp_group, input$mp_plot_type)
   
   plot_settings$metabolite <- input$mp_metabolite
   plot_settings$group <- input$mp_group
   plot_settings$plot_type <- input$mp_plot_type
   
-  plotIsotopologue(mfa$normalized_long_format, mfa$sequence, plot_settings)
+  plotIsotopologue(active_long_format_sum(), mfa$sequence, plot_settings)
 
 })
 
 ### Group x Time ###
 output$group_time_plot <- renderPlotly({
-  req(mfa$normalized_long_format_ref, mfa$sequence, input$metabolite_time_table, input$time_point, input$plot_type_time)
+  req(active_long_format_zero(), mfa$sequence, input$metabolite_time_table, input$time_point, input$plot_type_time)
   
   plot_settings$metabolite <- input$metabolite_time_table
   plot_settings$time_points <- input$time_point
   plot_settings$plot_type <- input$plot_type_time
   
-  plotGroupTime(mfa$normalized_long_format_ref, mfa$sequence, plot_settings)
+  plotGroupTime(active_long_format_zero(), mfa$sequence, plot_settings)
 
 })

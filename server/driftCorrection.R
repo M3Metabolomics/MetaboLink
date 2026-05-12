@@ -1,15 +1,45 @@
-  # observeEvent(input$driftMethod, {
-  #   if (input$driftMethod == "QC-RFSC (random forrest)") {
-  #     hide("dc_qcspan_hide")
-  #     hide("dc_degree_hide")
-  #     show("dc_ntree_hide")
-  #   } else {
-  #     hide("dc_ntree_hide")
-  #     show("dc_qcspan_hide")
-  #     show("dc_degree_hide")
-  #   }
-  # })
-  
+# Feature Drift Modal
+drift_modal <- function() {
+  modalDialog(
+    title = "Feature Drift Visualization",
+    size = "xl",
+    easyClose = TRUE,
+    footer = modalButton("Close"),
+    div(
+      class = "drift-wrap",
+      fluidRow(
+        column(3,
+               h4("Features"),
+               DTOutput("dt_drift_panel")
+        ),
+        column(9,
+               h4("Drift Correction Analysis"),
+               fluidRow(
+                 column(4, 
+                        selectizeInput("drift_select", "Select dataset to compare with", 
+                                       choices = NULL, width = "100%", 
+                                       options = list(placeholder = "Select file"))
+                 ),
+                 column(2, style = "margin-top: 25px;", 
+                        bsButton("drift_1", label = "Individual", block = TRUE)
+                 ),
+                 column(2, style = "margin-top: 25px;", 
+                        bsButton("drift_2", label = "CV variation", block = TRUE)
+                 ),
+                 column(2, style = "margin-top: 25px;", 
+                        bsButton("drift_3", label = "CV distribution", block = TRUE)
+                 )
+               ),
+               fluidRow(
+                 column(12,
+                        uiOutput("drift_ui")
+                 )
+               )
+        )
+      )
+    )
+  )
+}
 observeEvent(input$runDrift, {
   tryCatch({
     # Check if activeFile is NULL
@@ -105,7 +135,11 @@ observeEvent(input$runDrift, {
     print(traceback())  # This will show the call stack
   })
 })
-  
+# Observer to open the drift modal
+observeEvent(input$drift_open_modal, {
+  showModal(drift_modal())
+})
+
   observeEvent(input$saveDrift, {
     tryCatch({
       additionalInfo <- paste(
@@ -116,6 +150,18 @@ observeEvent(input$runDrift, {
     }, error = function(e) {
       showNotification(paste("Error saving drift correction:", e$message), type = "error")
     })
+  })
+  # Populate drift_select dropdown when modal opens
+  observeEvent(input$drift_open_modal, {
+    choices <- c("None", rv$choices)
+    updateSelectizeInput(session, "drift_select", choices = choices, selected = "None")
+  })
+  
+  # Update drift_select choices when datasets change
+  observe({
+    req(rv$choices)
+    choices <- c("None", rv$choices)
+    updateSelectizeInput(session, "drift_select", choices = choices, selected = isolate(input$drift_select))
   })
 
     observeEvent(input$select_boxplot_1, { #TODO which rv choices -> function
@@ -175,5 +221,36 @@ observeEvent(input$runDrift, {
           fluidRow(column(12, plotOutput(paste0("boxplotoutput", i), height = 280, width = "100%")))
         })
       }
+    )
+  })
+  
+  # Table for drift feature selection
+  output$dt_drift_panel <- DT::renderDT({
+    req(rv$activeFile)
+    
+    # Get the current data
+    if (!is.null(rv$tmpData)) {
+      data <- rv$tmpData
+    } else {
+      sd <- which(rv$choices %in% rv$activeFile)
+      req(length(sd) > 0)
+      data <- rv$data[[sd]]
+    }
+    
+    # Create a data frame with feature names
+    df <- data.frame(
+      Feature = rownames(data),
+      stringsAsFactors = FALSE
+    )
+    
+    DT::datatable(
+      df,
+      selection = "single",
+      options = list(
+        pageLength = 10,
+        scrollX = TRUE,
+        dom = 'Bfrtip'
+      ),
+      rownames = FALSE
     )
   })

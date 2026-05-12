@@ -214,7 +214,9 @@ sidebar <- dashboardSidebar(
                             ),
                             bsCollapsePanel("Drift correction",
                                             fluidRow(
-                                              selectInput("driftMethod", "Signal correction method", choices = c("QC-RFSC (random forest)", "QC-RLSC (robust LOESS)"), width = "100%")
+                                              selectInput("driftMethod", "Signal correction method", 
+                                                          choices = c("QC-RFSC (random forest)", "QC-RLSC (robust LOESS)"), 
+                                                          width = "100%")
                                             ),
                                             fluidRow(
                                               conditionalPanel(
@@ -233,10 +235,24 @@ sidebar <- dashboardSidebar(
                                                 )
                                               )
                                             ),
-                                            fluidRow(style = "margin-right: 0px;",
-                                                     column(12, checkboxInput("newFileDrift", "Save as new file", value = T, width = "100%"), style = "padding: 0px; margin-top: -10px; margin-left: 10px; margin-right: -10px;"),
-                                                     column(6, bsButton("runDrift", "Run", width = "100%"), style = "padding-left:0px;"),
-                                                     column(6, bsButton("saveDrift", "Save", width = "100%"), style = "padding-left:0px;")
+                                            fluidRow(
+                                              style = "margin-right: 0px;",
+                                              column(12, checkboxInput("newFileDrift", "Save as new file", value = T, width = "100%"), 
+                                                     style = "padding: 0px; margin-top: -10px; margin-left: 10px; margin-right: -10px;"),
+                                              column(6, bsButton("runDrift", "Run", width = "100%"), style = "padding-left:0px;"),
+                                              column(6, bsButton("saveDrift", "Save", width = "100%"), style = "padding-left:0px;")
+                                            ),
+                                            # Feature Drift button (appears after drift correction is run) - same style as Absolute Quantification
+                                            conditionalPanel(
+                                              condition = "input.runDrift > 0",
+                                              tags$hr(),
+                                              h4("Feature Drift Visualization"),
+                                              actionButton(
+                                                inputId = "drift_open_modal",
+                                                label   = "Open Feature Drift window",
+                                                class   = "btn-primary",
+                                                style   = "width:90%;"
+                                              )
                                             )
                             ),
                             bsCollapsePanel("More",
