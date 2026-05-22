@@ -6,8 +6,20 @@ RUN rm -rf /srv/shiny-server/*
 COPY . /srv/shiny-server/
 WORKDIR /srv/shiny-server/
 
+#RUN apt-get update && \
+   # apt-get install -y --no-install-recommends libglpk-dev libmagick++-dev imagemagick && \
+   # rm -rf /var/lib/apt/lists/*
+   
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends libglpk-dev libmagick++-dev imagemagick && \
+    apt-get install -y --no-install-recommends \
+    libglpk-dev \
+    libmagick++-dev \
+    imagemagick \
+    libuv1-dev \
+    libcurl4-openssl-dev \
+    libssl-dev \
+    libxml2-dev \
+    git && \
     rm -rf /var/lib/apt/lists/*
 
 RUN Rscript /srv/shiny-server/install_packages.R

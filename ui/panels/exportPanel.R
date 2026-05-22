@@ -16,6 +16,9 @@ exportPanel <- fluidRow(
                    h4("Statistics results"),
                    uiOutput("export_stats")
             ),
+            column(12, style = "margin-top: 10px;",
+                   uiOutput("volcano_export_buttons")  # Add this line
+            ),
             column(12, style = "margin-top: 20px;",
                    h4("Settings used in app"),
                    uiOutput("export_settings")

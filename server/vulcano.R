@@ -560,6 +560,41 @@ observeEvent(input$run_volcano_plot, {
         
       }
       
+      # ============================================================
+      # Store volcano results for export (bypasses rv$choices)
+      # ============================================================
+      # Create a copy of sub_df for export
+      export_volcano_df <- as.data.frame(sub_df)
+      
+      # Create a descriptive name with parameters
+      volcano_result_name <- paste0(
+        dataset_name, 
+        "_Volcano_", numerator, "_vs_", denominator,
+        "_FC", input$log2fc_threshold,
+        "_p", input$pval_threshold
+      )
+      
+      # Store in a separate reactiveValues for volcano exports
+      if (is.null(rv$volcano_exports)) {
+        rv$volcano_exports <- list()
+      }
+      
+      # Add/update volcano export
+      rv$volcano_exports[[volcano_result_name]] <- export_volcano_df
+      
+      # Also maintain a list of volcano export names
+      if (is.null(rv$volcano_export_names)) {
+        rv$volcano_export_names <- character()
+      }
+      
+      if (!(volcano_result_name %in% rv$volcano_export_names)) {
+        rv$volcano_export_names <- c(rv$volcano_export_names, volcano_result_name)
+      }
+      
+      
+      message(paste("Volcano results ready for export:", volcano_result_name))
+      # ============================================================
+      
       # assign the sub_df a name for debugging
       volcano_df_name <- paste0(dataset_name, "_volcano_df")
       assign(volcano_df_name, sub_df)
